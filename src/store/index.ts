@@ -15,6 +15,41 @@ import type {
 } from "@/lib/types";
 import { buildSeed, LEAF_CATEGORIES } from "@/lib/seed";
 
+export const MIN_PRICE = 0;
+export const MAX_PRICE = 99999.99;
+export const MAX_SELL_BUY_RATIO = 10;
+
+export function clampPrice(value: number, min = MIN_PRICE, max = MAX_PRICE): number {
+  if (!Number.isFinite(value) || Number.isNaN(value)) return min;
+  const rounded = Math.round(value * 100) / 100;
+  return Math.min(max, Math.max(min, rounded));
+}
+
+export function isPriceValid(value: number, min = MIN_PRICE, max = MAX_PRICE): boolean {
+  return Number.isFinite(value) && !Number.isNaN(value) && value >= min && value <= max;
+}
+
+export interface PriceValidation {
+  valid: boolean;
+  error?: string;
+}
+
+export function validatePricePair(buyPrice: number, sellPrice: number): PriceValidation {
+  if (!isPriceValid(buyPrice)) {
+    return { valid: false, error: `收购价需在 ${MIN_PRICE} ~ ${MAX_PRICE} 元之间` };
+  }
+  if (!isPriceValid(sellPrice)) {
+    return { valid: false, error: `出货价需在 ${MIN_PRICE} ~ ${MAX_PRICE} 元之间` };
+  }
+  if (buyPrice > 0 && sellPrice > 0 && sellPrice < buyPrice) {
+    return { valid: false, error: "出货价不应低于收购价，否则将亏损" };
+  }
+  if (buyPrice > 0 && sellPrice / buyPrice > MAX_SELL_BUY_RATIO) {
+    return { valid: false, error: `出货价不应超过收购价的 ${MAX_SELL_BUY_RATIO} 倍，请确认是否录入有误` };
+  }
+  return { valid: true };
+}
+
 interface StoreState extends AppState {
   updatePrice: (categoryId: string, newPrice: number, note?: string) => void;
   toggleCategoryActive: (categoryId: string) => void;
@@ -306,6 +341,10 @@ export const useStore = create<StoreState>()(
           const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
           const cat = state.categories.find((c) => c.id === categoryId);
           if (!cat) return {};
+
+          const safeBuy = clampPrice(buyPrice, 0, MAX_PRICE);
+          const safeSell = clampPrice(sellPrice, 0, MAX_PRICE);
+
           return {
             marketPrices: state.marketPrices.map((mp) => {
               if (mp.categoryId !== categoryId) return mp;
@@ -313,8 +352,8 @@ export const useStore = create<StoreState>()(
               let newTrend = [...mp.weekTrend];
               const newPoint = {
                 date: todayStr,
-                buyPrice,
-                sellPrice,
+                buyPrice: safeBuy,
+                sellPrice: safeSell,
                 source: "manual" as const,
                 note,
                 recordedAt: now,
@@ -326,8 +365,8 @@ export const useStore = create<StoreState>()(
               }
               return {
                 ...mp,
-                currentBuy: buyPrice,
-                currentSell: sellPrice,
+                currentBuy: safeBuy,
+                currentSell: safeSell,
                 weekTrend: newTrend,
                 updatedAt: now,
               };

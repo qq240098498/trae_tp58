@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { Save, Search } from "lucide-react";
-import { useStore } from "@/store";
+import { useState, useEffect, useMemo } from "react";
+import { Save, Search, AlertCircle } from "lucide-react";
+import { useStore, validatePricePair, MAX_PRICE, MIN_PRICE } from "@/store";
 import type { CategoryType, MarketPrice } from "@/lib/types";
 import { CATEGORY_META, CATEGORY_ORDER, formatMoney, unitLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,33 @@ export default function MarketPriceEntryModal({ open, onClose, preselectedCatego
   const selectedCat = leafCats.find((c) => c.id === selectedCategoryId);
   const selectedMp: MarketPrice | undefined = marketPrices.find((m) => m.categoryId === selectedCategoryId);
 
-  const valid = selectedCategoryId && parseFloat(buyPrice) >= 0 && parseFloat(sellPrice) >= 0;
+  const parsedBuy = parseFloat(buyPrice);
+  const parsedSell = parseFloat(sellPrice);
+  const buyParsed = buyPrice !== "" && !Number.isNaN(parsedBuy);
+  const sellParsed = sellPrice !== "" && !Number.isNaN(parsedSell);
+
+  const validation = useMemo(() => {
+    if (!selectedCategoryId) return { valid: false };
+    if (!buyParsed || !sellParsed) return { valid: false };
+    return validatePricePair(parsedBuy, parsedSell);
+  }, [selectedCategoryId, buyParsed, sellParsed, parsedBuy, parsedSell]);
+
+  const valid = !!validation.valid;
+
+  const buyError = useMemo(() => {
+    if (!buyParsed) return buyPrice === "" ? undefined : "请输入有效数字";
+    if (parsedBuy < MIN_PRICE) return `价格不能小于 ${MIN_PRICE} 元`;
+    if (parsedBuy > MAX_PRICE) return `价格不能超过 ${MAX_PRICE} 元`;
+    return undefined;
+  }, [buyParsed, parsedBuy, buyPrice]);
+
+  const sellError = useMemo(() => {
+    if (!sellParsed) return sellPrice === "" ? undefined : "请输入有效数字";
+    if (parsedSell < MIN_PRICE) return `价格不能小于 ${MIN_PRICE} 元`;
+    if (parsedSell > MAX_PRICE) return `价格不能超过 ${MAX_PRICE} 元`;
+    if (buyParsed && parsedBuy > 0 && parsedSell < parsedBuy) return "出货价不应低于收购价";
+    return undefined;
+  }, [sellParsed, parsedSell, sellPrice, buyParsed, parsedBuy]);
 
   const handleSelectCategory = (catId: string) => {
     setSelectedCategoryId(catId);
@@ -71,11 +97,13 @@ export default function MarketPriceEntryModal({ open, onClose, preselectedCatego
   };
 
   const handleSubmit = () => {
-    if (!valid) return;
+    if (!valid || !selectedCat) return;
+    const finalCheck = validatePricePair(parsedBuy, parsedSell);
+    if (!finalCheck.valid) return;
     recordMarketPrice({
       categoryId: selectedCategoryId,
-      buyPrice: Math.round(parseFloat(buyPrice) * 100) / 100,
-      sellPrice: Math.round(parseFloat(sellPrice) * 100) / 100,
+      buyPrice: Math.round(parsedBuy * 100) / 100,
+      sellPrice: Math.round(parsedSell * 100) / 100,
       note: note.trim() || undefined,
     });
     onClose();
@@ -233,34 +261,46 @@ export default function MarketPriceEntryModal({ open, onClose, preselectedCatego
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
+                        min={MIN_PRICE}
+                        max={MAX_PRICE}
                         value={buyPrice}
                         onChange={(e) => setBuyPrice(e.target.value)}
-                        placeholder="例如 1.20"
-                        className="input"
+                        placeholder={`例如 1.20（${MIN_PRICE}-${MAX_PRICE}）`}
+                        className={cn("input", buyError && "border-brick-400/60 focus:border-brick-400")}
                       />
                       <p className="mt-1 text-[11px] text-ink-500">
                         建议：{selectedMp
                           ? `当前 ¥${formatMoney(selectedMp.currentBuy)}`
                           : `参考系统价 ¥${formatMoney(selectedCat.unitPrice)}`}
                       </p>
+                      {buyError && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-brick-300">
+                          <AlertCircle size={11} /> {buyError}
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="label">参考出货价（元/{unitLabel(selectedCat.unit)}）</label>
                       <input
                         type="number"
                         step="0.01"
-                        min="0"
+                        min={MIN_PRICE}
+                        max={MAX_PRICE}
                         value={sellPrice}
                         onChange={(e) => setSellPrice(e.target.value)}
-                        placeholder="例如 1.80"
-                        className="input"
+                        placeholder={`例如 1.80（${MIN_PRICE}-${MAX_PRICE}）`}
+                        className={cn("input", sellError && "border-brick-400/60 focus:border-brick-400")}
                       />
                       <p className="mt-1 text-[11px] text-ink-500">
                         {parseFloat(buyPrice) > 0 && (
                           <>建议：约收购价的 {(parseFloat(sellPrice) / parseFloat(buyPrice) * 100).toFixed(0)}%</>
                         )}
                       </p>
+                      {sellError && (
+                        <p className="mt-1 flex items-center gap-1 text-[11px] text-brick-300">
+                          <AlertCircle size={11} /> {sellError}
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -274,22 +314,35 @@ export default function MarketPriceEntryModal({ open, onClose, preselectedCatego
                     />
                   </div>
 
-                  {parseFloat(buyPrice) >= 0 && parseFloat(sellPrice) >= 0 && parseFloat(buyPrice) > 0 && (
+                  {valid && parsedBuy > 0 && (
                     <div className="mt-4 rounded-lg border border-moss-300/20 bg-moss-300/5 p-3">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-ink-400">预估毛利率</span>
                         <span className="font-mono font-semibold text-moss-300">
-                          {((parseFloat(sellPrice) - parseFloat(buyPrice)) / parseFloat(sellPrice) * 100).toFixed(1)}%
+                          {((parsedSell - parsedBuy) / parsedSell * 100).toFixed(1)}%
                         </span>
                       </div>
                       <div className="mt-1 flex items-center justify-between text-xs">
                         <span className="text-ink-400">每{unitLabel(selectedCat.unit)}利润</span>
                         <span className="font-mono font-semibold text-amber-300">
-                          ¥{formatMoney(parseFloat(sellPrice) - parseFloat(buyPrice))}
+                          ¥{formatMoney(parsedSell - parsedBuy)}
                         </span>
                       </div>
                     </div>
                   )}
+
+                  {!valid && (buyParsed || sellParsed) && validation.error && !buyError && !sellError && (
+                    <div className="mt-4 flex items-start gap-2 rounded-lg border border-brick-400/30 bg-brick-500/10 p-3">
+                      <AlertCircle size={14} className="mt-0.5 shrink-0 text-brick-300" />
+                      <p className="text-xs text-brick-200">{validation.error}</p>
+                    </div>
+                  )}
+
+                  <div className="mt-3 flex items-center gap-1.5 text-[10px] text-ink-500">
+                    <span>价格范围：{MIN_PRICE} ~ {MAX_PRICE} 元</span>
+                    <span className="text-ink-600">·</span>
+                    <span>支持两位小数</span>
+                  </div>
                 </div>
               </>
             ) : (
