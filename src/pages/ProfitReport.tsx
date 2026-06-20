@@ -79,6 +79,7 @@ export default function ProfitReport() {
       const dateStr = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, "0")}-${String(orderDate.getDate()).padStart(2, "0")}`;
 
       if (startDate && dateStr < startDate) return false;
+      if (endDate && dateStr > endDate) return false;
       if (selectedBuyer && order.buyerId !== selectedBuyer) return false;
       if (selectedCategory) {
         const hasCategory = order.lines.some((l) => l.categoryId === selectedCategory);
@@ -87,7 +88,7 @@ export default function ProfitReport() {
 
       return true;
     });
-  }, [salesOrders, startDate, selectedBuyer, selectedCategory]);
+  }, [salesOrders, startDate, endDate, selectedBuyer, selectedCategory]);
 
   const summary = useMemo(() => {
     const totalSales = filteredOrders.reduce((s, o) => s + o.totalAmount, 0);
@@ -105,18 +106,18 @@ export default function ProfitReport() {
   }, [filteredOrders]);
 
   const profitByCategory = useMemo(
-    () => aggregateProfitByCategory(salesOrders, { startDate, endDate: dateRange === "all" ? undefined : endDate, buyerId: selectedBuyer || undefined }),
-    [salesOrders, startDate, endDate, dateRange, selectedBuyer]
+    () => aggregateProfitByCategory(filteredOrders, { categoryId: selectedCategory || undefined }),
+    [filteredOrders, selectedCategory]
   );
 
   const profitByBuyer = useMemo(
-    () => aggregateProfitByBuyer(salesOrders, { startDate, endDate: dateRange === "all" ? undefined : endDate, categoryId: selectedCategory || undefined }),
-    [salesOrders, startDate, endDate, dateRange, selectedCategory]
+    () => aggregateProfitByBuyer(filteredOrders, { categoryId: selectedCategory || undefined }),
+    [filteredOrders, selectedCategory]
   );
 
   const profitByDay = useMemo(
-    () => aggregateProfitByDay(salesOrders, DATE_RANGE_DAYS[dateRange], { buyerId: selectedBuyer || undefined, categoryId: selectedCategory || undefined }),
-    [salesOrders, dateRange, selectedBuyer, selectedCategory]
+    () => aggregateProfitByDay(filteredOrders, DATE_RANGE_DAYS[dateRange]),
+    [filteredOrders, dateRange]
   );
 
   const leafCategories = categories.filter((c) => c.parentId !== null);

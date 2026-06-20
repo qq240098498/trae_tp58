@@ -135,7 +135,7 @@ export interface ProfitByCategory {
 
 export function aggregateProfitByCategory(
   salesOrders: SalesOrder[],
-  options?: { startDate?: string; endDate?: string; buyerId?: string }
+  options?: { startDate?: string; endDate?: string; buyerId?: string; categoryId?: string }
 ): ProfitByCategory[] {
   const map = new Map<string, ProfitByCategory>();
 
@@ -150,6 +150,8 @@ export function aggregateProfitByCategory(
     if (options?.buyerId && order.buyerId !== options.buyerId) continue;
 
     for (const line of order.lines) {
+      if (options?.categoryId && line.categoryId !== options.categoryId) continue;
+
       const existing = map.get(line.categoryId);
       if (existing) {
         existing.quantity += line.quantity;
