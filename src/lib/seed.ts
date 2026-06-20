@@ -11,6 +11,9 @@ import type {
   SortRecord,
   MarketPrice,
   MarketPricePoint,
+  PickupRoute,
+  PickupPhoto,
+  PickupWeighing,
 } from "./types";
 
 const NOW = new Date("2026-06-20T16:30:00").getTime();
@@ -220,12 +223,15 @@ function buildAppointments(): Appointment[] {
       customerName: "城西小区物业",
       phone: "0571-8800-2233",
       address: "江干区凯旋路 268 号城西花园 3 栋楼下",
+      region: "江干区",
       estimatedWeight: 120,
       categoryIds: ["cat_paper_cardboard", "cat_plastic_pet", "cat_metal_iron"],
       status: "pending",
       appointmentTime: todayAt(15, 0),
       createdAt: daysAgo(1, 14),
       note: "物业统一清理，需大车",
+      routeId: "RT2026062001",
+      pickupStatus: "pending",
     },
     {
       id: "AP2026062002",
@@ -233,6 +239,7 @@ function buildAppointments(): Appointment[] {
       customerName: "李阿姨",
       phone: "139****8810",
       address: "上城区婺江路 88 号望江家园 5-2-1802",
+      region: "上城区",
       estimatedWeight: 35,
       categoryIds: ["cat_paper_newspaper", "cat_clo_summer"],
       status: "dispatched",
@@ -240,6 +247,38 @@ function buildAppointments(): Appointment[] {
       createdAt: daysAgo(0, 9),
       driver: "刘师傅",
       note: "老人在家，请提前电话",
+      routeId: "RT2026062002",
+      pickupStatus: "arrived",
+    },
+    {
+      id: "AP2026062005",
+      customerId: "cust_001",
+      customerName: "王大爷",
+      phone: "138****1234",
+      address: "江干区庆春东路 128 号庆春银泰 C 座",
+      region: "江干区",
+      estimatedWeight: 25,
+      categoryIds: ["cat_paper_book", "cat_clo_winter"],
+      status: "pending",
+      appointmentTime: todayAt(14, 0),
+      createdAt: daysAgo(0, 10),
+      routeId: "RT2026062001",
+      pickupStatus: "pending",
+    },
+    {
+      id: "AP2026062006",
+      customerId: "cust_002",
+      customerName: "张女士",
+      phone: "139****5678",
+      address: "上城区解放路 56 号解放路百货附近",
+      region: "上城区",
+      estimatedWeight: 80,
+      categoryIds: ["cat_paper_cardboard", "cat_plastic_pet", "cat_metal_iron"],
+      status: "pending",
+      appointmentTime: todayAt(17, 0),
+      createdAt: daysAgo(0, 11),
+      routeId: "RT2026062002",
+      pickupStatus: "pending",
     },
     {
       id: "AP2026061903",
@@ -247,6 +286,7 @@ function buildAppointments(): Appointment[] {
       customerName: "老赵五金店",
       phone: "137****5521",
       address: "拱墅区莫干山路 1188 号五金城 B 区 21 号",
+      region: "拱墅区",
       estimatedWeight: 200,
       categoryIds: ["cat_metal_iron", "cat_metal_aluminum", "cat_metal_steel"],
       status: "completed",
@@ -254,6 +294,7 @@ function buildAppointments(): Appointment[] {
       createdAt: daysAgo(2, 16),
       driver: "刘师傅",
       actualTransactionId: "T20260619002",
+      pickupStatus: "completed",
     },
     {
       id: "AP2026062104",
@@ -261,14 +302,53 @@ function buildAppointments(): Appointment[] {
       customerName: "张师傅",
       phone: "138****2046",
       address: "西湖区文三路 478 号华星时代广场 B 座",
+      region: "西湖区",
       estimatedWeight: 60,
       categoryIds: ["cat_paper_cardboard", "cat_plastic_hard"],
       status: "pending",
       appointmentTime: daysAgo(-1, 9),
       createdAt: daysAgo(0, 13),
       note: "明日早上优先",
+      pickupStatus: "pending",
     },
   ];
+}
+
+function buildPickupRoutes(): PickupRoute[] {
+  return [
+    {
+      id: "RT2026062001",
+      name: "江干区路线1",
+      region: "江干区",
+      driver: "王师傅",
+      status: "planning",
+      appointmentIds: ["AP2026062001", "AP2026062005"],
+      createdAt: todayAt(9, 0),
+      estimatedDistanceKm: 8.5,
+      totalEstimatedWeight: 145,
+      note: "优先处理物业大单",
+    },
+    {
+      id: "RT2026062002",
+      name: "上城区路线1",
+      region: "上城区",
+      driver: "刘师傅",
+      status: "in_progress",
+      appointmentIds: ["AP2026062002", "AP2026062006"],
+      createdAt: todayAt(9, 0),
+      dispatchedAt: todayAt(14, 0),
+      estimatedDistanceKm: 6.2,
+      totalEstimatedWeight: 115,
+    },
+  ];
+}
+
+function buildPickupPhotos(): PickupPhoto[] {
+  return [];
+}
+
+function buildPickupWeighings(): PickupWeighing[] {
+  return [];
 }
 
 function buildSalesOrders(): SalesOrder[] {
@@ -450,6 +530,9 @@ export function buildSeed(): AppState {
   const settlements = buildSettlements();
   const sortRecords = buildSortRecords(transactions);
   const marketPrices = buildMarketPrices(CATEGORIES);
+  const pickupRoutes = buildPickupRoutes();
+  const pickupPhotos = buildPickupPhotos();
+  const pickupWeighings = buildPickupWeighings();
   return {
     station: {
       name: "绿源回收 · 城东站",
@@ -467,6 +550,9 @@ export function buildSeed(): AppState {
     settlements,
     sortRecords,
     marketPrices,
+    pickupRoutes,
+    pickupPhotos,
+    pickupWeighings,
   };
 }
 

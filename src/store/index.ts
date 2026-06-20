@@ -12,6 +12,11 @@ import type {
   InventoryBucket,
   Settlement,
   MarketPrice,
+  PickupRoute,
+  RouteStatus,
+  PickupPhoto,
+  PickupWeighing,
+  PickupStatus,
 } from "@/lib/types";
 import { buildSeed, LEAF_CATEGORIES } from "@/lib/seed";
 
@@ -64,6 +69,7 @@ interface StoreState extends AppState {
   voidTransaction: (id: string) => void;
   createAppointment: (input: Omit<Appointment, "id" | "createdAt" | "status">) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus, extra?: Partial<Appointment>) => void;
+  updateAppointmentPickupStatus: (id: string, pickupStatus: PickupStatus, extra?: Partial<Appointment>) => void;
   createSalesOrder: (input: {
     buyerId: string;
     buyerName: string;
@@ -81,6 +87,18 @@ interface StoreState extends AppState {
     note?: string;
   }) => void;
   getMarketPrice: (categoryId: string) => MarketPrice | undefined;
+  generateRoutes: (options?: { date?: number }) => PickupRoute[];
+  createPickupRoute: (input: Omit<PickupRoute, "id" | "createdAt" | "status"> & { appointmentIds: string[] }) => PickupRoute;
+  updateRouteStatus: (id: string, status: RouteStatus, extra?: Partial<PickupRoute>) => void;
+  assignAppointmentToRoute: (appointmentId: string, routeId: string) => void;
+  unassignAppointmentFromRoute: (appointmentId: string) => void;
+  addPickupPhoto: (input: Omit<PickupPhoto, "id" | "uploadedAt">) => PickupPhoto;
+  removePickupPhoto: (id: string) => void;
+  addPickupWeighing: (input: Omit<PickupWeighing, "id" | "recordedAt">) => PickupWeighing;
+  removePickupWeighing: (id: string) => void;
+  getAppointmentPhotos: (appointmentId: string) => PickupPhoto[];
+  getAppointmentWeighings: (appointmentId: string) => PickupWeighing[];
+  getRouteAppointments: (routeId: string) => Appointment[];
 }
 
 function bumpInventory(inventory: InventoryBucket[], lines: (TransactionLine | SalesLine)[], dir: 1 | -1): InventoryBucket[] {
@@ -377,6 +395,209 @@ export const useStore = create<StoreState>()(
       getMarketPrice: (categoryId) => {
         const state = get();
         return state.marketPrices.find((mp) => mp.categoryId === categoryId);
+      },
+
+      updateAppointmentPickupStatus: (id, pickupStatus, extra) =>
+        set((state) => ({
+          appointments: state.appointments.map((a) =>
+            a.id === id ? { ...a, pickupStatus, ...extra } : a
+          ),
+        })),
+
+      generateRoutes: (options) => {
+        const state = get();
+        const targetDate = options?.date ?? Date.now();
+        const d = new Date(targetDate);
+        const isSameDay = (ts: number) => {
+          const td = new Date(ts);
+          return (
+            td.getFullYear() === d.getFullYear() &&
+            td.getMonth() === d.getMonth() &&
+            td.getDate() === d.getDate()
+          );
+        };
+
+        const pendingAppts = state.appointments.filter(
+          (a) =>
+            (a.status === "pending" || a.status === "dispatched") &&
+            isSameDay(a.appointmentTime)
+        );
+
+        const regionGroups = new Map<string, Appointment[]>();
+        for (const appt of pendingAppts) {
+          if (appt.routeId && state.pickupRoutes.some((r) => r.id === appt.routeId)) continue;
+          let region = appt.region;
+          if (!region) {
+            const match = appt.address.match(/^(?:\w+市)?([\u4e00-\u9fa5]+区)/);
+            region = match ? match[1] : "其他区域";
+          }
+          if (!regionGroups.has(region)) regionGroups.set(region, []);
+          regionGroups.get(region)!.push(appt);
+        }
+
+        const drivers = ["刘师傅", "王师傅", "陈师傅"];
+        const newRoutes: PickupRoute[] = [];
+        let routeIdx = state.pickupRoutes.filter((r) => isSameDay(r.createdAt)).length;
+
+        for (const [region, appts] of regionGroups) {
+          if (appts.length === 0) continue;
+          routeIdx++;
+          const totalWeight = appts.reduce((s, a) => s + a.estimatedWeight, 0);
+          const route: PickupRoute = {
+            id: nextId("RT", state.pickupRoutes.concat(newRoutes)),
+            name: `${region}路线${routeIdx}`,
+            region,
+            driver: drivers[routeIdx % drivers.length],
+            status: "planning",
+            appointmentIds: appts.map((a) => a.id),
+            createdAt: Date.now(),
+            estimatedDistanceKm: 5 + Math.round(appts.length * 1.5 * 10) / 10,
+            totalEstimatedWeight: totalWeight,
+          };
+          newRoutes.push(route);
+        }
+
+        const updatedAppts = state.appointments.map((a) => {
+          const route = newRoutes.find((r) => r.appointmentIds.includes(a.id));
+          if (route) return { ...a, routeId: route.id };
+          return a;
+        });
+
+        set((s) => ({
+          pickupRoutes: [...s.pickupRoutes, ...newRoutes],
+          appointments: updatedAppts,
+        }));
+
+        return newRoutes;
+      },
+
+      createPickupRoute: (input) => {
+        const state = get();
+        const route: PickupRoute = {
+          ...input,
+          id: nextId("RT", state.pickupRoutes),
+          createdAt: Date.now(),
+          status: "planning",
+        };
+        set((s) => ({
+          pickupRoutes: [route, ...s.pickupRoutes],
+          appointments: s.appointments.map((a) =>
+            input.appointmentIds.includes(a.id) ? { ...a, routeId: route.id } : a
+          ),
+        }));
+        return route;
+      },
+
+      updateRouteStatus: (id, status, extra) =>
+        set((state) => {
+          const now = Date.now();
+          return {
+            pickupRoutes: state.pickupRoutes.map((r) =>
+              r.id === id
+                ? {
+                    ...r,
+                    status,
+                    ...extra,
+                    dispatchedAt: status === "dispatched" || status === "in_progress" ? now : r.dispatchedAt,
+                    completedAt: status === "completed" ? now : r.completedAt,
+                  }
+                : r
+            ),
+            appointments: state.appointments.map((a) =>
+              a.routeId === id && (status === "dispatched" || status === "in_progress")
+                ? { ...a, status: "dispatched" as AppointmentStatus }
+                : a
+            ),
+          };
+        }),
+
+      assignAppointmentToRoute: (appointmentId, routeId) =>
+        set((state) => ({
+          appointments: state.appointments.map((a) =>
+            a.id === appointmentId ? { ...a, routeId } : a
+          ),
+          pickupRoutes: state.pickupRoutes.map((r) =>
+            r.id === routeId && !r.appointmentIds.includes(appointmentId)
+              ? {
+                  ...r,
+                  appointmentIds: [...r.appointmentIds, appointmentId],
+                  totalEstimatedWeight:
+                    (r.totalEstimatedWeight ?? 0) +
+                    (state.appointments.find((a) => a.id === appointmentId)?.estimatedWeight ?? 0),
+                }
+              : r
+          ),
+        })),
+
+      unassignAppointmentFromRoute: (appointmentId) =>
+        set((state) => {
+          const appt = state.appointments.find((a) => a.id === appointmentId);
+          if (!appt?.routeId) return {};
+          const routeId = appt.routeId;
+          return {
+            appointments: state.appointments.map((a) =>
+              a.id === appointmentId ? { ...a, routeId: undefined } : a
+            ),
+            pickupRoutes: state.pickupRoutes.map((r) =>
+              r.id === routeId
+                ? {
+                    ...r,
+                    appointmentIds: r.appointmentIds.filter((id) => id !== appointmentId),
+                    totalEstimatedWeight: Math.max(
+                      0,
+                      (r.totalEstimatedWeight ?? 0) - (appt.estimatedWeight ?? 0)
+                    ),
+                  }
+                : r
+            ),
+          };
+        }),
+
+      addPickupPhoto: (input) => {
+        const state = get();
+        const photo: PickupPhoto = {
+          ...input,
+          id: nextId("PH", state.pickupPhotos),
+          uploadedAt: Date.now(),
+        };
+        set((s) => ({ pickupPhotos: [photo, ...s.pickupPhotos] }));
+        return photo;
+      },
+
+      removePickupPhoto: (id) =>
+        set((state) => ({
+          pickupPhotos: state.pickupPhotos.filter((p) => p.id !== id),
+        })),
+
+      addPickupWeighing: (input) => {
+        const state = get();
+        const weighing: PickupWeighing = {
+          ...input,
+          id: nextId("PW", state.pickupWeighings),
+          recordedAt: Date.now(),
+        };
+        set((s) => ({ pickupWeighings: [weighing, ...s.pickupWeighings] }));
+        return weighing;
+      },
+
+      removePickupWeighing: (id) =>
+        set((state) => ({
+          pickupWeighings: state.pickupWeighings.filter((w) => w.id !== id),
+        })),
+
+      getAppointmentPhotos: (appointmentId) => {
+        const state = get();
+        return state.pickupPhotos.filter((p) => p.appointmentId === appointmentId);
+      },
+
+      getAppointmentWeighings: (appointmentId) => {
+        const state = get();
+        return state.pickupWeighings.filter((w) => w.appointmentId === appointmentId);
+      },
+
+      getRouteAppointments: (routeId) => {
+        const state = get();
+        return state.appointments.filter((a) => a.routeId === routeId);
       },
     }),
     {

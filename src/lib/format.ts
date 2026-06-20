@@ -1,4 +1,4 @@
-import type { CategoryType, PriceUnit } from "./types";
+import type { CategoryType, PriceUnit, RouteStatus, PickupStatus } from "./types";
 
 export function formatMoney(n: number): string {
   return n.toLocaleString("zh-CN", {
@@ -91,3 +91,24 @@ export const CATEGORY_ORDER: CategoryType[] = [
   "appliance",
   "clothing",
 ];
+
+export interface StatusMeta {
+  label: string;
+  tone: "moss" | "amber" | "sky" | "brick" | "slate" | "fuchsia" | "neutral";
+  accent: string;
+}
+
+export const ROUTE_STATUS_META: Record<RouteStatus, StatusMeta> = {
+  planning: { label: "规划中", tone: "neutral", accent: "bg-ink-500" },
+  dispatched: { label: "已派单", tone: "sky", accent: "bg-sky-400" },
+  in_progress: { label: "执行中", tone: "amber", accent: "bg-amber-300" },
+  completed: { label: "已完成", tone: "moss", accent: "bg-moss-400" },
+};
+
+export const PICKUP_STATUS_META: Record<PickupStatus, StatusMeta> = {
+  pending: { label: "待上门", tone: "neutral", accent: "bg-ink-500" },
+  arrived: { label: "已到达", tone: "sky", accent: "bg-sky-400" },
+  weighed: { label: "已称重", tone: "amber", accent: "bg-amber-300" },
+  uploaded: { label: "已上传", tone: "amber", accent: "bg-amber-300" },
+  completed: { label: "已完成", tone: "moss", accent: "bg-moss-400" },
+};

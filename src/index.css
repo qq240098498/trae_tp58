@@ -54,6 +54,9 @@ body {
   .btn-danger {
     @apply btn border border-brick-500/60 bg-brick-600/20 text-brick-300 hover:bg-brick-600/40;
   }
+  .btn-sky {
+    @apply btn bg-sky-400 text-ink-950 hover:bg-sky-300 hover:-translate-y-0.5;
+  }
   .chip {
     @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium;
   }

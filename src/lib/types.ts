@@ -4,6 +4,8 @@ export type TxSource = "onsite" | "pickup";
 export type TxStatus = "active" | "void";
 export type AppointmentStatus = "pending" | "dispatched" | "completed" | "cancelled";
 export type SalesStatus = "draft" | "shipped" | "settled";
+export type RouteStatus = "planning" | "dispatched" | "in_progress" | "completed";
+export type PickupStatus = "pending" | "arrived" | "weighed" | "uploaded" | "completed";
 
 export interface PriceHistory {
   price: number;
@@ -54,6 +56,7 @@ export interface Appointment {
   customerName: string;
   phone: string;
   address: string;
+  region?: string;
   estimatedWeight: number;
   categoryIds: string[];
   status: AppointmentStatus;
@@ -62,6 +65,46 @@ export interface Appointment {
   actualTransactionId?: string;
   note?: string;
   driver?: string;
+  routeId?: string;
+  pickupStatus?: PickupStatus;
+}
+
+export interface PickupPhoto {
+  id: string;
+  appointmentId: string;
+  type: "before" | "during" | "after" | "weighing";
+  dataUrl: string;
+  caption?: string;
+  uploadedAt: number;
+}
+
+export interface PickupWeighing {
+  id: string;
+  appointmentId: string;
+  categoryId: string;
+  categoryName: string;
+  unit: PriceUnit;
+  quantity: number;
+  unitPrice: number;
+  amount: number;
+  photoUrl?: string;
+  recordedAt: number;
+  operator: string;
+}
+
+export interface PickupRoute {
+  id: string;
+  name: string;
+  region: string;
+  driver: string;
+  status: RouteStatus;
+  appointmentIds: string[];
+  createdAt: number;
+  dispatchedAt?: number;
+  completedAt?: number;
+  estimatedDistanceKm?: number;
+  totalEstimatedWeight?: number;
+  note?: string;
 }
 
 export interface SalesLine {
@@ -176,4 +219,7 @@ export interface AppState {
   settlements: Settlement[];
   customers: Customer[];
   marketPrices: MarketPrice[];
+  pickupPhotos: PickupPhoto[];
+  pickupWeighings: PickupWeighing[];
+  pickupRoutes: PickupRoute[];
 }

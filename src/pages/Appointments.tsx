@@ -11,16 +11,25 @@ import {
   XCircle,
   Truck,
   ClipboardList,
+  Route as RouteIcon,
+  LayoutGrid,
+  Sparkles,
+  Camera,
+  Scale,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useStore } from "@/store";
-import type { Appointment, AppointmentStatus } from "@/lib/types";
-import { CATEGORY_META, formatWeight } from "@/lib/format";
+import type { Appointment, AppointmentStatus, PickupRoute } from "@/lib/types";
+import { CATEGORY_META, formatWeight, ROUTE_STATUS_META, PICKUP_STATUS_META } from "@/lib/format";
 import AppointmentCard from "@/components/appointments/AppointmentCard";
 import CreateAppointmentModal from "@/components/appointments/CreateAppointmentModal";
+import RouteCard from "@/components/appointments/RouteCard";
+import PickupOperationModal from "@/components/appointments/PickupOperationModal";
 import Modal from "@/components/ui/Modal";
 import Badge from "@/components/ui/Badge";
-import { cn } from "@/lib/utils";
+import { cn, extractRegion } from "@/lib/utils";
+
+type ViewMode = "kanban" | "routes";
 
 const COLUMNS: { key: AppointmentStatus | "done"; title: string; tone: string; accent: string }[] = [
   { key: "pending", title: "待派单", tone: "amber", accent: "bg-amber-300" },
@@ -31,12 +40,17 @@ const COLUMNS: { key: AppointmentStatus | "done"; title: string; tone: string; a
 export default function Appointments() {
   const navigate = useNavigate();
   const appointments = useStore((s) => s.appointments);
+  const pickupRoutes = useStore((s) => s.pickupRoutes);
   const updateAppointmentStatus = useStore((s) => s.updateAppointmentStatus);
+  const generateRoutes = useStore((s) => s.generateRoutes);
   const categories = useStore((s) => s.categories);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detail, setDetail] = useState<Appointment | null>(null);
   const [driver, setDriver] = useState("刘师傅");
+  const [viewMode, setViewMode] = useState<ViewMode>("routes");
+  const [pickupModal, setPickupModal] = useState<Appointment | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   const columns = useMemo(() => {
     return COLUMNS.map((col) => {
@@ -54,6 +68,15 @@ export default function Appointments() {
     .filter((a) => a.status === "pending" || a.status === "dispatched")
     .reduce((s, a) => s + a.estimatedWeight, 0);
 
+  const todayUngroupedCount = useMemo(() => {
+    const now = new Date();
+    return appointments.filter((a) => {
+      const d = new Date(a.appointmentTime);
+      const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+      return sameDay && !a.routeId && (a.status === "pending" || a.status === "dispatched");
+    }).length;
+  }, [appointments]);
+
   const handleDispatch = () => {
     if (!detail) return;
     updateAppointmentStatus(detail.id, "dispatched", { driver });
@@ -68,6 +91,12 @@ export default function Appointments() {
     if (!detail) return;
     updateAppointmentStatus(detail.id, "cancelled");
     setDetail(null);
+  };
+
+  const handleGenerateRoutes = () => {
+    setGenerating(true);
+    generateRoutes();
+    setTimeout(() => setGenerating(false), 400);
   };
 
   return (
@@ -105,45 +134,122 @@ export default function Appointments() {
               </p>
             </div>
           </div>
-        </div>
-        <button onClick={() => setCreateOpen(true)} className="btn-primary">
-          <Plus size={16} /> 新建预约
-        </button>
-      </div>
-
-      {/* Kanban */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-3">
-        {columns.map((col) => (
-          <div key={col.key} className="flex min-h-0 flex-col rounded-xl border border-ink-700/60 bg-ink-900/40">
-            <div className="flex items-center justify-between border-b border-ink-700/60 px-4 py-3">
-              <div className="flex items-center gap-2">
-                <span className={cn("h-2 w-2 rounded-full", col.accent)} />
-                <h3 className="font-display text-lg tracking-wide text-ink-100">{col.title}</h3>
-              </div>
-              <span className="rounded-full bg-ink-700/60 px-2 py-0.5 font-mono text-xs text-ink-300">
-                {col.list.length}
-              </span>
-            </div>
-            <div className="flex-1 space-y-2.5 overflow-y-auto scrollbar-thin p-3">
-              {col.list.map((appt) => (
-                <AppointmentCard
-                  key={appt.id}
-                  appt={appt}
-                  onClick={() => {
-                    setDetail(appt);
-                    setDriver(appt.driver || "刘师傅");
-                  }}
-                />
-              ))}
-              {col.list.length === 0 && (
-                <div className="flex h-32 items-center justify-center text-xs text-ink-500">暂无</div>
-              )}
+          <div className="card flex items-center gap-3 px-4 py-2.5">
+            <RouteIcon size={18} className="text-sky-300" />
+            <div>
+              <p className="text-xs text-ink-400">今日路线</p>
+              <p className="font-mono text-lg font-semibold text-ink-100">
+                {pickupRoutes.length}
+                <span className="ml-1 text-xs font-normal text-ink-400">条</span>
+              </p>
             </div>
           </div>
-        ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg border border-ink-600 bg-ink-900/60 p-0.5">
+            <button
+              onClick={() => setViewMode("routes")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                viewMode === "routes" ? "bg-moss-300/20 text-moss-200" : "text-ink-400 hover:text-ink-200"
+              )}
+            >
+              <RouteIcon size={14} /> 路线聚合
+            </button>
+            <button
+              onClick={() => setViewMode("kanban")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                viewMode === "kanban" ? "bg-moss-300/20 text-moss-200" : "text-ink-400 hover:text-ink-200"
+              )}
+            >
+              <LayoutGrid size={14} /> 看板
+            </button>
+          </div>
+          {viewMode === "routes" && todayUngroupedCount > 0 && (
+            <button onClick={handleGenerateRoutes} disabled={generating} className="btn-sky btn">
+              <Sparkles size={14} className={cn(generating && "animate-spin")} />
+              智能聚单 ({todayUngroupedCount})
+            </button>
+          )}
+          <button onClick={() => setCreateOpen(true)} className="btn-primary">
+            <Plus size={16} /> 新建预约
+          </button>
+        </div>
       </div>
 
+      {viewMode === "kanban" && (
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-3">
+          {columns.map((col) => (
+            <div key={col.key} className="flex min-h-0 flex-col rounded-xl border border-ink-700/60 bg-ink-900/40">
+              <div className="flex items-center justify-between border-b border-ink-700/60 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full", col.accent)} />
+                  <h3 className="font-display text-lg tracking-wide text-ink-100">{col.title}</h3>
+                </div>
+                <span className="rounded-full bg-ink-700/60 px-2 py-0.5 font-mono text-xs text-ink-300">
+                  {col.list.length}
+                </span>
+              </div>
+              <div className="flex-1 space-y-2.5 overflow-y-auto scrollbar-thin p-3">
+                {col.list.map((appt) => (
+                  <AppointmentCard
+                    key={appt.id}
+                    appt={appt}
+                    onClick={() => {
+                      setDetail(appt);
+                      setDriver(appt.driver || "刘师傅");
+                    }}
+                  />
+                ))}
+                {col.list.length === 0 && (
+                  <div className="flex h-32 items-center justify-center text-xs text-ink-500">暂无</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {viewMode === "routes" && (
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto scrollbar-thin md:grid-cols-2 xl:grid-cols-3">
+          {pickupRoutes.length === 0 ? (
+            <div className="col-span-full flex h-64 flex-col items-center justify-center rounded-xl border border-dashed border-ink-600 text-center">
+              <RouteIcon size={36} className="mb-3 opacity-30 text-ink-400" />
+              <p className="text-sm font-medium text-ink-200">暂无今日路线</p>
+              <p className="mt-1 text-xs text-ink-500">
+                点击右上角「智能聚单」，系统将按区域自动聚合待上门预约
+              </p>
+              {todayUngroupedCount > 0 && (
+                <button onClick={handleGenerateRoutes} className="btn-primary mt-4 h-9 text-sm">
+                  <Sparkles size={14} /> 开始智能聚单
+                </button>
+              )}
+            </div>
+          ) : (
+            pickupRoutes.map((route) => (
+              <RouteCard
+                key={route.id}
+                route={route}
+                onOpenAppointment={(appt) => {
+                  setDetail(appt);
+                  setDriver(appt.driver || route.driver);
+                  setPickupModal(appt);
+                }}
+              />
+            ))
+          )}
+        </div>
+      )}
+
       <CreateAppointmentModal open={createOpen} onClose={() => setCreateOpen(false)} />
+
+      {/* Pickup Operation Modal */}
+      <PickupOperationModal
+        open={!!pickupModal}
+        onClose={() => setPickupModal(null)}
+        appointment={pickupModal}
+      />
 
       {/* Detail */}
       <Modal
@@ -164,8 +270,13 @@ export default function Appointments() {
                     <XCircle size={15} /> 取消预约
                   </button>
                 )}
+                {detail.status === "dispatched" && (
+                  <button onClick={() => setPickupModal(detail)} className="btn-sky btn">
+                    <Camera size={15} /> 上门操作
+                  </button>
+                )}
                 {detail.status === "pending" && (
-                  <button onClick={handleDispatch} className="btn-amber">
+                  <button onClick={handleDispatch} className="btn-amber btn">
                     <Truck size={15} /> 派单上门
                   </button>
                 )}
@@ -198,20 +309,36 @@ export default function Appointments() {
                   </p>
                 </div>
               </div>
-              <Badge
-                tone={
-                  detail.status === "pending" ? "amber" : detail.status === "dispatched" ? "sky" : detail.status === "completed" ? "moss" : "brick"
-                }
-              >
-                {detail.status === "pending" ? "待派单" : detail.status === "dispatched" ? "进行中" : detail.status === "completed" ? "已完成" : "已取消"}
-              </Badge>
+              <div className="flex flex-col items-end gap-1">
+                <Badge
+                  tone={
+                    detail.status === "pending" ? "amber" : detail.status === "dispatched" ? "sky" : detail.status === "completed" ? "moss" : "brick"
+                  }
+                >
+                  {detail.status === "pending" ? "待派单" : detail.status === "dispatched" ? "进行中" : detail.status === "completed" ? "已完成" : "已取消"}
+                </Badge>
+                {detail.pickupStatus && (
+                  <Badge tone={PICKUP_STATUS_META[detail.pickupStatus].tone} size="sm">
+                    {PICKUP_STATUS_META[detail.pickupStatus].label}
+                  </Badge>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <InfoTile icon={MapPin} label="上门地址" value={detail.address} full />
+              {detail.region && <InfoTile icon={MapPin} label="所属区域" value={detail.region} valueClass="text-sky-200" />}
               <InfoTile icon={Clock} label="预约时间" value={new Date(detail.appointmentTime).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })} />
               <InfoTile icon={Weight} label="预估重量" value={`${detail.estimatedWeight} kg`} valueClass="text-amber-200" />
               {detail.driver && <InfoTile icon={User} label="派单司机" value={detail.driver} valueClass="text-sky-200" />}
+              {detail.routeId && (
+                <InfoTile
+                  icon={RouteIcon}
+                  label="所属路线"
+                  value={pickupRoutes.find((r) => r.id === detail.routeId)?.name ?? detail.routeId}
+                  valueClass="text-sky-200"
+                />
+              )}
             </div>
 
             <div>
