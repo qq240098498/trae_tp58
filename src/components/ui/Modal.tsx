@@ -36,18 +36,18 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
       <div
         className="absolute inset-0 bg-ink-950/70 backdrop-blur-sm animate-[fade-up_0.2s_ease-out]"
         onClick={onClose}
       />
       <div
         className={cn(
-          "relative w-full rounded-2xl border border-ink-600/70 bg-ink-850 shadow-panel animate-scale-in",
+          "relative flex max-h-[calc(100vh-2rem)] w-full flex-col rounded-2xl border border-ink-600/70 bg-ink-850 shadow-panel animate-scale-in",
           sizeMap[size]
         )}
       >
-        <div className="flex items-start justify-between border-b border-ink-700/60 px-6 py-4">
+        <div className="flex shrink-0 items-start justify-between border-b border-ink-700/60 px-6 py-4">
           <div>
             <h3 className="font-display text-2xl tracking-wide text-ink-100">{title}</h3>
             {subtitle && <p className="mt-0.5 text-xs text-ink-300">{subtitle}</p>}
@@ -60,9 +60,9 @@ export default function Modal({ open, onClose, title, subtitle, children, footer
             <X size={18} />
           </button>
         </div>
-        <div className="max-h-[65vh] overflow-y-auto scrollbar-thin px-6 py-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin px-6 py-5">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 border-t border-ink-700/60 px-6 py-4">
+          <div className="flex shrink-0 items-center justify-end gap-3 border-t border-ink-700/60 px-6 py-4">
             {footer}
           </div>
         )}
