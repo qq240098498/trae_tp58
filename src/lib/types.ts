@@ -73,6 +73,13 @@ export interface SalesLine {
   amount: number;
 }
 
+export interface SalesStatusLog {
+  status: SalesStatus;
+  at: number;
+  operator?: string;
+  note?: string;
+}
+
 export interface SalesOrder {
   id: string;
   buyerId: string;
@@ -85,6 +92,7 @@ export interface SalesOrder {
   status: SalesStatus;
   lines: SalesLine[];
   note?: string;
+  statusLog: SalesStatusLog[];
 }
 
 export interface InventoryBucket {

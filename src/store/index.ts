@@ -39,7 +39,7 @@ interface StoreState extends AppState {
     lines: SalesLine[];
     note?: string;
   }) => SalesOrder;
-  updateSalesStatus: (id: string, status: SalesStatus) => void;
+  updateSalesStatus: (id: string, status: SalesStatus, operator?: string, note?: string) => void;
   // settlement
   lockSettlement: (date: string, data: Omit<Settlement, "id" | "date" | "locked" | "createdAt" | "byCategory">) => Settlement;
   resetData: () => void;
@@ -196,23 +196,25 @@ export const useStore = create<StoreState>()(
         const state = get();
         const totalAmount = Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
         const totalWeightKg = Math.round(lines.reduce((s, l) => s + (l.unit === "kg" ? l.quantity : 0), 0) * 10) / 10;
+        const now = Date.now();
         const order: SalesOrder = {
           id: nextId("SO", state.salesOrders),
           buyerId,
           buyerName,
           buyerContact,
-          createdAt: Date.now(),
+          createdAt: now,
           totalAmount,
           totalWeightKg,
           status: "draft",
           lines,
           note,
+          statusLog: [{ status: "draft", at: now, operator: state.station.operator, note: "创建出货单" }],
         };
         set((s) => ({ salesOrders: [order, ...s.salesOrders] }));
         return order;
       },
 
-      updateSalesStatus: (id, status) =>
+      updateSalesStatus: (id, status, operator, note) =>
         set((state) => {
           const order = state.salesOrders.find((o) => o.id === id);
           if (!order) return {};
@@ -224,10 +226,19 @@ export const useStore = create<StoreState>()(
           } else if (wasShipped && status === "draft") {
             inventory = bumpInventory(state.inventory, order.lines, 1);
           }
+          const now = Date.now();
           return {
             salesOrders: state.salesOrders.map((o) =>
               o.id === id
-                ? { ...o, status, settledAt: status === "settled" ? Date.now() : o.settledAt }
+                ? {
+                    ...o,
+                    status,
+                    settledAt: status === "settled" ? now : o.settledAt,
+                    statusLog: [
+                      ...o.statusLog,
+                      { status, at: now, operator: operator ?? state.station.operator, note },
+                    ],
+                  }
                 : o
             ),
             inventory,

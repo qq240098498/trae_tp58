@@ -287,6 +287,11 @@ function buildSalesOrders(): SalesOrder[] {
         makeSalesLine("cat_metal_copper", 10, 47.00),
       ],
       note: "含税，款已到账",
+      statusLog: [
+        { status: "draft", at: daysAgo(5, 14), operator: "陈主管", note: "创建出货单" },
+        { status: "shipped", at: daysAgo(5, 16), operator: "刘师傅", note: "装车发运" },
+        { status: "settled", at: daysAgo(4, 10), operator: "陈主管", note: "银行转账 ¥8,260 到账" },
+      ],
     },
     {
       id: "SO20260618002",
@@ -301,6 +306,11 @@ function buildSalesOrders(): SalesOrder[] {
       lines: [
         makeSalesLine("cat_paper_cardboard", 1200, 1.80),
         makeSalesLine("cat_paper_newspaper", 600, 1.30),
+      ],
+      statusLog: [
+        { status: "draft", at: daysAgo(2, 15), operator: "陈主管", note: "创建出货单" },
+        { status: "shipped", at: daysAgo(2, 17), operator: "王师傅", note: "装车发运" },
+        { status: "settled", at: daysAgo(1, 11), operator: "陈主管", note: "现金 ¥3,180 已收" },
       ],
     },
     {
@@ -317,6 +327,10 @@ function buildSalesOrders(): SalesOrder[] {
         makeSalesLine("cat_plastic_hard", 100, 18.00),
       ],
       note: "款预计 T+1 到账",
+      statusLog: [
+        { status: "draft", at: todayAt(11, 0), operator: "陈主管", note: "创建出货单" },
+        { status: "shipped", at: todayAt(13, 30), operator: "陈师傅", note: "装车发运，预计次日结算" },
+      ],
     },
   ];
 }

@@ -8,6 +8,9 @@ import {
   Banknote,
   Clock,
   TrendingUp,
+  RotateCcw,
+  User,
+  History,
 } from "lucide-react";
 import { useStore } from "@/store";
 import type { SalesOrder, SalesStatus } from "@/lib/types";
@@ -15,6 +18,7 @@ import { CATEGORY_META, formatMoney, formatWeight } from "@/lib/format";
 import SectionHeader from "@/components/ui/SectionHeader";
 import Badge from "@/components/ui/Badge";
 import CreateSalesOrderModal from "@/components/sales/CreateSalesOrderModal";
+import SalesStatusConfirmModal from "@/components/sales/SalesStatusConfirmModal";
 import { cn } from "@/lib/utils";
 
 const STATUS_META: Record<SalesStatus, { label: string; tone: "neutral" | "sky" | "moss" }> = {
@@ -28,6 +32,7 @@ export default function Sales() {
   const updateSalesStatus = useStore((s) => s.updateSalesStatus);
   const [createOpen, setCreateOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [confirmOrder, setConfirmOrder] = useState<{ order: SalesOrder; target: SalesStatus } | null>(null);
 
   const sorted = useMemo(
     () => [...salesOrders].sort((a, b) => b.createdAt - a.createdAt),
@@ -49,6 +54,16 @@ export default function Sales() {
       else next.add(id);
       return next;
     });
+
+  const handleRequestStatus = (order: SalesOrder, target: SalesStatus) => {
+    setConfirmOrder({ order, target });
+  };
+
+  const handleConfirmStatus = (note: string) => {
+    if (!confirmOrder) return;
+    updateSalesStatus(confirmOrder.order.id, confirmOrder.target, undefined, note || undefined);
+    setConfirmOrder(null);
+  };
 
   return (
     <div className="space-y-5">
@@ -74,7 +89,7 @@ export default function Sales() {
               order={order}
               expanded={expanded.has(order.id)}
               onToggle={() => toggle(order.id)}
-              onStatus={(s) => updateSalesStatus(order.id, s)}
+              onStatus={(s) => handleRequestStatus(order, s)}
             />
           ))}
           {sorted.length === 0 && (
@@ -86,6 +101,13 @@ export default function Sales() {
       </div>
 
       <CreateSalesOrderModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <SalesStatusConfirmModal
+        open={!!confirmOrder}
+        onClose={() => setConfirmOrder(null)}
+        order={confirmOrder?.order ?? null}
+        targetStatus={confirmOrder?.target ?? "draft"}
+        onConfirm={handleConfirmStatus}
+      />
     </div>
   );
 }
@@ -144,56 +166,104 @@ function OrderRow({
 
       {expanded && (
         <div className="animate-[fade-up_0.2s_ease-out] border-t border-ink-700/40 bg-ink-900/30 px-5 py-4">
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-wider text-ink-400">出货明细</p>
-              <div className="overflow-hidden rounded-lg border border-ink-700/50">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-ink-800/60 text-xs text-ink-400">
-                      <th className="px-3 py-2 text-left font-medium">品类</th>
-                      <th className="px-3 py-2 text-center font-medium">单位</th>
-                      <th className="px-3 py-2 text-right font-medium">数量</th>
-                      <th className="px-3 py-2 text-right font-medium">单价</th>
-                      <th className="px-3 py-2 text-right font-medium">金额</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {order.lines.map((l, i) => {
-                      const parts = l.categoryId.split("_");
-                      const type = parts[1] as keyof typeof CATEGORY_META;
-                      const cm = CATEGORY_META[type];
-                      return (
-                        <tr key={i} className="border-t border-ink-700/40">
-                          <td className="px-3 py-2 text-ink-100">
-                            <span className="inline-flex items-center gap-1.5">
-                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cm.color }} />
-                              {l.categoryName}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-center text-xs text-ink-400">{l.unit === "kg" ? "公斤" : "个"}</td>
-                          <td className="px-3 py-2 text-right font-mono text-ink-200">{l.quantity}</td>
-                          <td className="px-3 py-2 text-right font-mono text-ink-200">¥{formatMoney(l.unitPrice)}</td>
-                          <td className="px-3 py-2 text-right font-mono font-semibold text-amber-200">¥{formatMoney(l.amount)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t border-ink-700/60 bg-ink-800/40">
-                      <td colSpan={4} className="px-3 py-2 text-right text-xs text-ink-400">合计</td>
-                      <td className="px-3 py-2 text-right font-mono text-base font-bold text-amber-200">¥{formatMoney(order.totalAmount)}</td>
-                    </tr>
-                  </tfoot>
-                </table>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_300px]">
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-xs uppercase tracking-wider text-ink-400">出货明细</p>
+                <div className="overflow-hidden rounded-lg border border-ink-700/50">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-ink-800/60 text-xs text-ink-400">
+                        <th className="px-3 py-2 text-left font-medium">品类</th>
+                        <th className="px-3 py-2 text-center font-medium">单位</th>
+                        <th className="px-3 py-2 text-right font-medium">数量</th>
+                        <th className="px-3 py-2 text-right font-medium">单价</th>
+                        <th className="px-3 py-2 text-right font-medium">金额</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {order.lines.map((l, i) => {
+                        const parts = l.categoryId.split("_");
+                        const type = parts[1] as keyof typeof CATEGORY_META;
+                        const cm = CATEGORY_META[type];
+                        return (
+                          <tr key={i} className="border-t border-ink-700/40">
+                            <td className="px-3 py-2 text-ink-100">
+                              <span className="inline-flex items-center gap-1.5">
+                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cm.color }} />
+                                {l.categoryName}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-center text-xs text-ink-400">{l.unit === "kg" ? "公斤" : "个"}</td>
+                            <td className="px-3 py-2 text-right font-mono text-ink-200">{l.quantity}</td>
+                            <td className="px-3 py-2 text-right font-mono text-ink-200">¥{formatMoney(l.unitPrice)}</td>
+                            <td className="px-3 py-2 text-right font-mono font-semibold text-amber-200">¥{formatMoney(l.amount)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-ink-700/60 bg-ink-800/40">
+                        <td colSpan={4} className="px-3 py-2 text-right text-xs text-ink-400">合计</td>
+                        <td className="px-3 py-2 text-right font-mono text-base font-bold text-amber-200">¥{formatMoney(order.totalAmount)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
               </div>
               {order.note && (
-                <p className="mt-2 text-xs text-ink-400">备注：{order.note}</p>
+                <p className="text-xs text-ink-400">订单备注：{order.note}</p>
               )}
-              {order.settledAt && (
-                <p className="mt-1 text-xs text-moss-300">结算时间：{new Date(order.settledAt).toLocaleString("zh-CN")}</p>
-              )}
+
+              {/* Status history timeline */}
+              <div>
+                <div className="mb-2 flex items-center gap-1.5 text-xs uppercase tracking-wider text-ink-400">
+                  <History size={12} /> 操作记录
+                </div>
+                <div className="rounded-lg border border-ink-700/50 bg-ink-900/40 p-4">
+                  <ol className="relative space-y-3.5">
+                    {(order.statusLog ?? []).map((log, i) => {
+                      const m = STATUS_META[log.status];
+                      const isLast = i === (order.statusLog ?? []).length - 1;
+                      return (
+                        <li key={i} className="flex gap-3">
+                          <div className="relative flex flex-col items-center">
+                            <div className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 text-[10px] font-bold",
+                              isLast
+                                ? "border-moss-300/60 bg-moss-300/15 text-moss-200"
+                                : "border-ink-600 bg-ink-800 text-ink-400"
+                            )}>
+                              {i + 1}
+                            </div>
+                            {!isLast && <div className="mt-1 w-0.5 flex-1 bg-ink-700/60" />}
+                          </div>
+                          <div className="flex-1 pb-1">
+                            <div className="flex items-center gap-2">
+                              <Badge tone={m.tone} size="sm">{m.label}</Badge>
+                              <span className="font-mono text-[11px] text-ink-400">
+                                {new Date(log.at).toLocaleString("zh-CN")}
+                              </span>
+                            </div>
+                            {log.operator && (
+                              <p className="mt-0.5 flex items-center gap-1 text-[11px] text-ink-300">
+                                <User size={11} className="text-ink-500" />
+                                {log.operator}
+                              </p>
+                            )}
+                            {log.note && (
+                              <p className="mt-0.5 text-[11px] text-ink-400">{log.note}</p>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </div>
+              </div>
             </div>
+
+            {/* Right column: Status flow + actions */}
             <div className="space-y-3">
               <p className="text-xs uppercase tracking-wider text-ink-400">状态流转</p>
               <div className="flex items-center gap-1">
@@ -213,6 +283,19 @@ function OrderRow({
                   );
                 })}
               </div>
+
+              <div className="rounded-lg border border-ink-700/50 bg-ink-900/40 p-3 text-[11px] text-ink-400">
+                {order.status === "draft" && (
+                  <p>草稿状态可编辑修改，<span className="text-amber-200">确认出库后库存将同步扣减</span>。</p>
+                )}
+                {order.status === "shipped" && (
+                  <p>已出库表示货物已发出，<span className="text-moss-200">确认结算后标记为款项已收妥</span>。</p>
+                )}
+                {order.status === "settled" && (
+                  <p>订单已结算完成。如需调整可<span className="text-amber-200">退回草稿</span>重新操作。</p>
+                )}
+              </div>
+
               <div className="space-y-2">
                 {order.status === "draft" && (
                   <button onClick={() => onStatus("shipped")} className="btn-amber w-full">
@@ -226,7 +309,7 @@ function OrderRow({
                 )}
                 {order.status !== "draft" && (
                   <button onClick={() => onStatus("draft")} className="btn-ghost w-full text-xs">
-                    退回草稿
+                    <RotateCcw size={13} /> 退回草稿（撤销{order.status === "settled" ? "结算并回滚库存" : "出库"}）
                   </button>
                 )}
               </div>
