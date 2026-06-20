@@ -18,7 +18,7 @@ import type {
   PickupWeighing,
   PickupStatus,
 } from "@/lib/types";
-import { buildSeed, CATEGORIES, LEAF_CATEGORIES } from "@/lib/seed";
+import { buildSeed, LEAF_CATEGORIES } from "@/lib/seed";
 import { extractRegion } from "@/lib/utils";
 
 export const MIN_PRICE = 0;
@@ -75,7 +75,7 @@ interface StoreState extends AppState {
     buyerId: string;
     buyerName: string;
     buyerContact?: string;
-    lines: SalesLine[];
+    lines: Omit<SalesLine, "costPrice" | "costAmount" | "grossProfit">[];
     note?: string;
   }) => SalesOrder;
   updateSalesStatus: (id: string, status: SalesStatus, operator?: string, note?: string) => void;
@@ -254,6 +254,24 @@ export const useStore = create<StoreState>()(
         const totalAmount = Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
         const totalWeightKg = Math.round(lines.reduce((s, l) => s + (l.unit === "kg" ? l.quantity : 0), 0) * 10) / 10;
         const now = Date.now();
+
+        const linesWithProfit = lines.map((line) => {
+          const cat = state.categories.find((c) => c.id === line.categoryId);
+          const costPrice = cat ? cat.unitPrice : 0;
+          const costAmount = Math.round(costPrice * line.quantity * 100) / 100;
+          const grossProfit = Math.round((line.amount - costAmount) * 100) / 100;
+          return {
+            ...line,
+            costPrice,
+            costAmount,
+            grossProfit,
+          };
+        });
+
+        const totalCost = Math.round(linesWithProfit.reduce((s, l) => s + l.costAmount, 0) * 100) / 100;
+        const totalGrossProfit = Math.round(linesWithProfit.reduce((s, l) => s + l.grossProfit, 0) * 100) / 100;
+        const grossMargin = totalAmount > 0 ? Math.round((totalGrossProfit / totalAmount) * 10000) / 100 : 0;
+
         const order: SalesOrder = {
           id: nextId("SO", state.salesOrders),
           buyerId,
@@ -262,8 +280,11 @@ export const useStore = create<StoreState>()(
           createdAt: now,
           totalAmount,
           totalWeightKg,
+          totalCost,
+          totalGrossProfit,
+          grossMargin,
           status: "draft",
-          lines,
+          lines: linesWithProfit,
           note,
           statusLog: [{ status: "draft", at: now, operator: state.station.operator, note: "创建出货单" }],
         };
@@ -603,7 +624,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: "recycle-station-db",
-      version: 4,
+      version: 5,
       migrate: (persistedState: unknown, version: number) => {
         const state = persistedState as Partial<AppState>;
         if (version < 4) {
@@ -624,6 +645,34 @@ export const useStore = create<StoreState>()(
               pickupStatus: a.pickupStatus ?? (a.status === "completed" ? "completed" : "pending"),
               routeId: a.routeId ?? routeMap.get(a.id),
             }));
+          }
+        }
+        if (version < 5) {
+          if (state.salesOrders && state.categories) {
+            state.salesOrders = state.salesOrders.map((order) => {
+              const lines = order.lines.map((line) => {
+                const cat = state.categories!.find((c) => c.id === line.categoryId);
+                const costPrice = cat ? cat.unitPrice : 0;
+                const costAmount = Math.round(costPrice * line.quantity * 100) / 100;
+                const grossProfit = Math.round((line.amount - costAmount) * 100) / 100;
+                return {
+                  ...line,
+                  costPrice,
+                  costAmount,
+                  grossProfit,
+                };
+              });
+              const totalCost = Math.round(lines.reduce((s, l) => s + l.costAmount, 0) * 100) / 100;
+              const totalGrossProfit = Math.round(lines.reduce((s, l) => s + l.grossProfit, 0) * 100) / 100;
+              const grossMargin = order.totalAmount > 0 ? Math.round((totalGrossProfit / order.totalAmount) * 10000) / 100 : 0;
+              return {
+                ...order,
+                lines,
+                totalCost,
+                totalGrossProfit,
+                grossMargin,
+              };
+            });
           }
         }
         return state as AppState;

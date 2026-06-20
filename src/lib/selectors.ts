@@ -120,3 +120,207 @@ export function todaySales(sales: SalesOrder[]): SalesOrder[] {
 export function categoryColor(type: Category["type"]): string {
   return CATEGORY_META[type].color;
 }
+
+export interface ProfitByCategory {
+  categoryId: string;
+  categoryName: string;
+  type: Category["type"];
+  quantity: number;
+  unit: "kg" | "piece";
+  salesAmount: number;
+  costAmount: number;
+  grossProfit: number;
+  grossMargin: number;
+}
+
+export function aggregateProfitByCategory(
+  salesOrders: SalesOrder[],
+  options?: { startDate?: string; endDate?: string; buyerId?: string }
+): ProfitByCategory[] {
+  const map = new Map<string, ProfitByCategory>();
+
+  for (const order of salesOrders) {
+    if (order.status === "draft") continue;
+
+    const orderDate = new Date(order.settledAt ?? order.createdAt);
+    const dateStr = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, "0")}-${String(orderDate.getDate()).padStart(2, "0")}`;
+
+    if (options?.startDate && dateStr < options.startDate) continue;
+    if (options?.endDate && dateStr > options.endDate) continue;
+    if (options?.buyerId && order.buyerId !== options.buyerId) continue;
+
+    for (const line of order.lines) {
+      const existing = map.get(line.categoryId);
+      if (existing) {
+        existing.quantity += line.quantity;
+        existing.salesAmount += line.amount;
+        existing.costAmount += line.costAmount;
+        existing.grossProfit += line.grossProfit;
+      } else {
+        const type = line.categoryId.split("_")[1] as Category["type"];
+        map.set(line.categoryId, {
+          categoryId: line.categoryId,
+          categoryName: line.categoryName,
+          type,
+          quantity: line.quantity,
+          unit: line.unit,
+          salesAmount: line.amount,
+          costAmount: line.costAmount,
+          grossProfit: line.grossProfit,
+          grossMargin: 0,
+        });
+      }
+    }
+  }
+
+  return Array.from(map.values()).map((item) => ({
+    ...item,
+    quantity: Math.round(item.quantity * 100) / 100,
+    salesAmount: Math.round(item.salesAmount * 100) / 100,
+    costAmount: Math.round(item.costAmount * 100) / 100,
+    grossProfit: Math.round(item.grossProfit * 100) / 100,
+    grossMargin: item.salesAmount > 0 ? Math.round((item.grossProfit / item.salesAmount) * 10000) / 100 : 0,
+  })).sort((a, b) => b.grossProfit - a.grossProfit);
+}
+
+export interface ProfitByBuyer {
+  buyerId: string;
+  buyerName: string;
+  orderCount: number;
+  salesAmount: number;
+  costAmount: number;
+  grossProfit: number;
+  grossMargin: number;
+}
+
+export function aggregateProfitByBuyer(
+  salesOrders: SalesOrder[],
+  options?: { startDate?: string; endDate?: string; categoryId?: string }
+): ProfitByBuyer[] {
+  const map = new Map<string, ProfitByBuyer>();
+
+  for (const order of salesOrders) {
+    if (order.status === "draft") continue;
+
+    const orderDate = new Date(order.settledAt ?? order.createdAt);
+    const dateStr = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, "0")}-${String(orderDate.getDate()).padStart(2, "0")}`;
+
+    if (options?.startDate && dateStr < options.startDate) continue;
+    if (options?.endDate && dateStr > options.endDate) continue;
+
+    let orderSales = 0;
+    let orderCost = 0;
+    let orderProfit = 0;
+
+    if (options?.categoryId) {
+      for (const line of order.lines) {
+        if (line.categoryId === options.categoryId) {
+          orderSales += line.amount;
+          orderCost += line.costAmount;
+          orderProfit += line.grossProfit;
+        }
+      }
+      if (orderSales === 0) continue;
+    } else {
+      orderSales = order.totalAmount;
+      orderCost = order.totalCost;
+      orderProfit = order.totalGrossProfit;
+    }
+
+    const existing = map.get(order.buyerId);
+    if (existing) {
+      existing.orderCount += 1;
+      existing.salesAmount += orderSales;
+      existing.costAmount += orderCost;
+      existing.grossProfit += orderProfit;
+    } else {
+      map.set(order.buyerId, {
+        buyerId: order.buyerId,
+        buyerName: order.buyerName,
+        orderCount: 1,
+        salesAmount: orderSales,
+        costAmount: orderCost,
+        grossProfit: orderProfit,
+        grossMargin: 0,
+      });
+    }
+  }
+
+  return Array.from(map.values()).map((item) => ({
+    ...item,
+    salesAmount: Math.round(item.salesAmount * 100) / 100,
+    costAmount: Math.round(item.costAmount * 100) / 100,
+    grossProfit: Math.round(item.grossProfit * 100) / 100,
+    grossMargin: item.salesAmount > 0 ? Math.round((item.grossProfit / item.salesAmount) * 10000) / 100 : 0,
+  })).sort((a, b) => b.grossProfit - a.grossProfit);
+}
+
+export interface ProfitByDay {
+  date: string;
+  label: string;
+  orderCount: number;
+  salesAmount: number;
+  costAmount: number;
+  grossProfit: number;
+  grossMargin: number;
+}
+
+export function aggregateProfitByDay(
+  salesOrders: SalesOrder[],
+  days: number,
+  options?: { buyerId?: string; categoryId?: string }
+): ProfitByDay[] {
+  const out: ProfitByDay[] = [];
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400000);
+    const label = `${d.getMonth() + 1}/${d.getDate()}`;
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    out.push({ date: dateStr, label, orderCount: 0, salesAmount: 0, costAmount: 0, grossProfit: 0, grossMargin: 0 });
+  }
+
+  for (const order of salesOrders) {
+    if (order.status === "draft") continue;
+
+    const orderDate = new Date(order.settledAt ?? order.createdAt);
+    const dateStr = `${orderDate.getFullYear()}-${String(orderDate.getMonth() + 1).padStart(2, "0")}-${String(orderDate.getDate()).padStart(2, "0")}`;
+
+    const bucket = out.find((o) => o.date === dateStr);
+    if (!bucket) continue;
+
+    if (options?.buyerId && order.buyerId !== options.buyerId) continue;
+
+    let orderSales = 0;
+    let orderCost = 0;
+    let orderProfit = 0;
+
+    if (options?.categoryId) {
+      for (const line of order.lines) {
+        if (line.categoryId === options.categoryId) {
+          orderSales += line.amount;
+          orderCost += line.costAmount;
+          orderProfit += line.grossProfit;
+        }
+      }
+      if (orderSales === 0) continue;
+    } else {
+      orderSales = order.totalAmount;
+      orderCost = order.totalCost;
+      orderProfit = order.totalGrossProfit;
+    }
+
+    bucket.orderCount += 1;
+    bucket.salesAmount += orderSales;
+    bucket.costAmount += orderCost;
+    bucket.grossProfit += orderProfit;
+  }
+
+  return out.map((o) => ({
+    ...o,
+    salesAmount: Math.round(o.salesAmount * 100) / 100,
+    costAmount: Math.round(o.costAmount * 100) / 100,
+    grossProfit: Math.round(o.grossProfit * 100) / 100,
+    grossMargin: o.salesAmount > 0 ? Math.round((o.grossProfit / o.salesAmount) * 10000) / 100 : 0,
+  }));
+}

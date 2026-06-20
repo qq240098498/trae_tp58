@@ -7,6 +7,7 @@ import Appointments from "@/pages/Appointments";
 import Sorting from "@/pages/Sorting";
 import Sales from "@/pages/Sales";
 import Settlement from "@/pages/Settlement";
+import ProfitReport from "@/pages/ProfitReport";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/sorting" element={<Sorting />} />
           <Route path="/sales" element={<Sales />} />
           <Route path="/settlement" element={<Settlement />} />
+          <Route path="/profit" element={<ProfitReport />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>

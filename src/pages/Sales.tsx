@@ -177,8 +177,10 @@ function OrderRow({
                         <th className="px-3 py-2 text-left font-medium">品类</th>
                         <th className="px-3 py-2 text-center font-medium">单位</th>
                         <th className="px-3 py-2 text-right font-medium">数量</th>
-                        <th className="px-3 py-2 text-right font-medium">单价</th>
-                        <th className="px-3 py-2 text-right font-medium">金额</th>
+                        <th className="px-3 py-2 text-right font-medium">出货单价</th>
+                        <th className="px-3 py-2 text-right font-medium">出货金额</th>
+                        <th className="px-3 py-2 text-right font-medium">成本单价</th>
+                        <th className="px-3 py-2 text-right font-medium">毛利</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -198,6 +200,10 @@ function OrderRow({
                             <td className="px-3 py-2 text-right font-mono text-ink-200">{l.quantity}</td>
                             <td className="px-3 py-2 text-right font-mono text-ink-200">¥{formatMoney(l.unitPrice)}</td>
                             <td className="px-3 py-2 text-right font-mono font-semibold text-amber-200">¥{formatMoney(l.amount)}</td>
+                            <td className="px-3 py-2 text-right font-mono text-brick-300">¥{formatMoney(l.costPrice)}</td>
+                            <td className={cn("px-3 py-2 text-right font-mono font-semibold", l.grossProfit >= 0 ? "text-moss-300" : "text-brick-300")}>
+                              ¥{formatMoney(l.grossProfit)}
+                            </td>
                           </tr>
                         );
                       })}
@@ -206,6 +212,16 @@ function OrderRow({
                       <tr className="border-t border-ink-700/60 bg-ink-800/40">
                         <td colSpan={4} className="px-3 py-2 text-right text-xs text-ink-400">合计</td>
                         <td className="px-3 py-2 text-right font-mono text-base font-bold text-amber-200">¥{formatMoney(order.totalAmount)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-sm text-brick-300">¥{formatMoney(order.totalCost)}</td>
+                        <td className={cn("px-3 py-2 text-right font-mono text-base font-bold", order.totalGrossProfit >= 0 ? "text-moss-300" : "text-brick-300")}>
+                          ¥{formatMoney(order.totalGrossProfit)}
+                        </td>
+                      </tr>
+                      <tr className="border-t border-ink-700/40 bg-ink-800/20">
+                        <td colSpan={6} className="px-3 py-2 text-right text-xs text-ink-400">毛利率</td>
+                        <td className={cn("px-3 py-2 text-right font-mono font-semibold", order.grossMargin >= 0 ? "text-moss-300" : "text-brick-300")}>
+                          {order.grossMargin}%
+                        </td>
                       </tr>
                     </tfoot>
                   </table>

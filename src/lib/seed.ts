@@ -352,7 +352,7 @@ function buildPickupWeighings(): PickupWeighing[] {
 }
 
 function buildSalesOrders(): SalesOrder[] {
-  return [
+  const orders: Omit<SalesOrder, "totalCost" | "totalGrossProfit" | "grossMargin">[] = [
     {
       id: "SO20260615001",
       buyerId: "cust_006",
@@ -415,17 +415,36 @@ function buildSalesOrders(): SalesOrder[] {
       ],
     },
   ];
+
+  return orders.map((order) => {
+    const totalCost = Math.round(order.lines.reduce((s, l) => s + l.costAmount, 0) * 100) / 100;
+    const totalGrossProfit = Math.round(order.lines.reduce((s, l) => s + l.grossProfit, 0) * 100) / 100;
+    const grossMargin = order.totalAmount > 0 ? Math.round((totalGrossProfit / order.totalAmount) * 10000) / 100 : 0;
+    return {
+      ...order,
+      totalCost,
+      totalGrossProfit,
+      grossMargin,
+    };
+  });
 }
 
 function makeSalesLine(catId: string, qty: number, unitPrice: number): import("./types").SalesLine {
   const c = CATEGORIES.find((x) => x.id === catId)!;
+  const amount = Math.round(qty * unitPrice * 100) / 100;
+  const costPrice = c.unitPrice;
+  const costAmount = Math.round(costPrice * qty * 100) / 100;
+  const grossProfit = Math.round((amount - costAmount) * 100) / 100;
   return {
     categoryId: c.id,
     categoryName: c.name,
     unit: c.unit,
     quantity: qty,
     unitPrice,
-    amount: Math.round(qty * unitPrice * 100) / 100,
+    amount,
+    costPrice,
+    costAmount,
+    grossProfit,
   };
 }
 

@@ -114,6 +114,9 @@ export interface SalesLine {
   quantity: number;
   unitPrice: number;
   amount: number;
+  costPrice: number;
+  costAmount: number;
+  grossProfit: number;
 }
 
 export interface SalesStatusLog {
@@ -132,6 +135,9 @@ export interface SalesOrder {
   settledAt?: number;
   totalAmount: number;
   totalWeightKg: number;
+  totalCost: number;
+  totalGrossProfit: number;
+  grossMargin: number;
   status: SalesStatus;
   lines: SalesLine[];
   note?: string;

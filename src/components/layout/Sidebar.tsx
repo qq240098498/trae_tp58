@@ -7,6 +7,7 @@ import {
   Boxes,
   PackageCheck,
   Calculator,
+  TrendingUp,
   Recycle,
   CircleDot,
 } from "lucide-react";
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/sorting", label: "分拣分类", icon: Boxes, hint: "库存分桶盘点" },
   { to: "/sales", label: "出货销售", icon: PackageCheck, hint: "出货单与结算" },
   { to: "/settlement", label: "日结对账", icon: Calculator, hint: "日结锁定对账" },
+  { to: "/profit", label: "利润核算", icon: TrendingUp, hint: "进销差价 · 毛利分析" },
 ];
 
 export default function Sidebar() {
