@@ -18,7 +18,8 @@ import type {
   PickupWeighing,
   PickupStatus,
 } from "@/lib/types";
-import { buildSeed, LEAF_CATEGORIES } from "@/lib/seed";
+import { buildSeed, CATEGORIES, LEAF_CATEGORIES } from "@/lib/seed";
+import { extractRegion } from "@/lib/utils";
 
 export const MIN_PRICE = 0;
 export const MAX_PRICE = 99999.99;
@@ -602,7 +603,31 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: "recycle-station-db",
-      version: 2,
+      version: 4,
+      migrate: (persistedState: unknown, version: number) => {
+        const state = persistedState as Partial<AppState>;
+        if (version < 4) {
+          const seed = buildSeed();
+          state.pickupRoutes = state.pickupRoutes ?? seed.pickupRoutes;
+          state.pickupPhotos = state.pickupPhotos ?? seed.pickupPhotos;
+          state.pickupWeighings = state.pickupWeighings ?? seed.pickupWeighings;
+          if (state.appointments) {
+            const routeMap = new Map<string, string>();
+            for (const route of state.pickupRoutes) {
+              for (const apptId of route.appointmentIds) {
+                routeMap.set(apptId, route.id);
+              }
+            }
+            state.appointments = state.appointments.map((a) => ({
+              ...a,
+              region: a.region ?? extractRegion(a.address),
+              pickupStatus: a.pickupStatus ?? (a.status === "completed" ? "completed" : "pending"),
+              routeId: a.routeId ?? routeMap.get(a.id),
+            }));
+          }
+        }
+        return state as AppState;
+      },
     }
   )
 );

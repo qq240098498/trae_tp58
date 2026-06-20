@@ -1,10 +1,10 @@
+import { useState, useMemo } from "react";
 import { MapPin, Weight, User, Navigation, CheckCircle2, Truck, Clock, ChevronDown, ChevronUp } from "lucide-react";
 import type { PickupRoute, Appointment } from "@/lib/types";
 import { ROUTE_STATUS_META, PICKUP_STATUS_META, CATEGORY_META, formatWeight } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import Badge from "@/components/ui/Badge";
 import { useStore } from "@/store";
-import { useState } from "react";
 
 interface RouteCardProps {
   route: PickupRoute;
@@ -19,10 +19,15 @@ const DRIVERS = [
 ];
 
 export default function RouteCard({ route, onOpenDetail, onOpenAppointment }: RouteCardProps) {
-  const appointments = useStore((s) => s.appointments.filter((a) => a.routeId === route.id));
+  const allAppointments = useStore((s) => s.appointments);
   const categories = useStore((s) => s.categories);
   const updateRouteStatus = useStore((s) => s.updateRouteStatus);
   const [expanded, setExpanded] = useState(true);
+
+  const appointments = useMemo(
+    () => allAppointments.filter((a) => a.routeId === route.id),
+    [allAppointments, route.id]
+  );
 
   const meta = ROUTE_STATUS_META[route.status];
   const driverInfo = DRIVERS.find((d) => d.name === route.driver) ?? DRIVERS[0];
