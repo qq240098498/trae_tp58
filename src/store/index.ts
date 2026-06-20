@@ -11,14 +11,13 @@ import type {
   SalesStatus,
   InventoryBucket,
   Settlement,
+  MarketPrice,
 } from "@/lib/types";
 import { buildSeed, LEAF_CATEGORIES } from "@/lib/seed";
 
 interface StoreState extends AppState {
-  // pricing
   updatePrice: (categoryId: string, newPrice: number, note?: string) => void;
   toggleCategoryActive: (categoryId: string) => void;
-  // intake
   createTransaction: (input: {
     source: Transaction["source"];
     customerId: string;
@@ -28,10 +27,8 @@ interface StoreState extends AppState {
     note?: string;
   }) => Transaction;
   voidTransaction: (id: string) => void;
-  // appointments
   createAppointment: (input: Omit<Appointment, "id" | "createdAt" | "status">) => Appointment;
   updateAppointmentStatus: (id: string, status: AppointmentStatus, extra?: Partial<Appointment>) => void;
-  // sales
   createSalesOrder: (input: {
     buyerId: string;
     buyerName: string;
@@ -40,9 +37,15 @@ interface StoreState extends AppState {
     note?: string;
   }) => SalesOrder;
   updateSalesStatus: (id: string, status: SalesStatus, operator?: string, note?: string) => void;
-  // settlement
   lockSettlement: (date: string, data: Omit<Settlement, "id" | "date" | "locked" | "createdAt" | "byCategory">) => Settlement;
   resetData: () => void;
+  recordMarketPrice: (input: {
+    categoryId: string;
+    buyPrice: number;
+    sellPrice: number;
+    note?: string;
+  }) => void;
+  getMarketPrice: (categoryId: string) => MarketPrice | undefined;
 }
 
 function bumpInventory(inventory: InventoryBucket[], lines: (TransactionLine | SalesLine)[], dir: 1 | -1): InventoryBucket[] {
@@ -295,6 +298,47 @@ export const useStore = create<StoreState>()(
       },
 
       resetData: () => set({ ...buildSeed() }),
+
+      recordMarketPrice: ({ categoryId, buyPrice, sellPrice, note }) =>
+        set((state) => {
+          const now = Date.now();
+          const today = new Date();
+          const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+          const cat = state.categories.find((c) => c.id === categoryId);
+          if (!cat) return {};
+          return {
+            marketPrices: state.marketPrices.map((mp) => {
+              if (mp.categoryId !== categoryId) return mp;
+              const existingTodayIdx = mp.weekTrend.findIndex((p) => p.date === todayStr);
+              let newTrend = [...mp.weekTrend];
+              const newPoint = {
+                date: todayStr,
+                buyPrice,
+                sellPrice,
+                source: "manual" as const,
+                note,
+                recordedAt: now,
+              };
+              if (existingTodayIdx >= 0) {
+                newTrend[existingTodayIdx] = newPoint;
+              } else {
+                newTrend = [...newTrend.slice(-6), newPoint];
+              }
+              return {
+                ...mp,
+                currentBuy: buyPrice,
+                currentSell: sellPrice,
+                weekTrend: newTrend,
+                updatedAt: now,
+              };
+            }),
+          };
+        }),
+
+      getMarketPrice: (categoryId) => {
+        const state = get();
+        return state.marketPrices.find((mp) => mp.categoryId === categoryId);
+      },
     }),
     {
       name: "recycle-station-db",

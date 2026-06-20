@@ -2,6 +2,7 @@ import { User, Plus, Trash2, Scale, Printer, RefreshCw } from "lucide-react";
 import type { WeighingDraft } from "@/hooks/useWeighingDraft";
 import { CATEGORY_META, formatMoney, unitLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import MarketPriceHint from "@/components/market/MarketPriceHint";
 
 interface WeighingPanelProps {
   draft: WeighingDraft;
@@ -110,7 +111,7 @@ export default function WeighingPanel({ draft, onConfirm }: WeighingPanelProps) 
 
         <div className="mt-3 space-y-2">
           <div className="grid grid-cols-[1fr_120px_120px_110px_40px] gap-2 px-1 text-[10px] uppercase tracking-wider text-ink-400">
-            <span>品类</span>
+            <span>品类 <span className="text-moss-300/60 normal-case tracking-normal">（含今日参考价）</span></span>
             <span className="text-center">单位</span>
             <span className="text-center">数量</span>
             <span className="text-right">金额</span>
@@ -125,22 +126,29 @@ export default function WeighingPanel({ draft, onConfirm }: WeighingPanelProps) 
                 key={l.key}
                 className="group grid grid-cols-[1fr_120px_120px_110px_40px] items-center gap-2 rounded-lg border border-ink-700/50 bg-ink-800/40 p-1.5 transition-colors hover:border-ink-500/50"
               >
-                <div className="relative">
-                  {meta && (
-                    <span className="absolute left-2.5 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ backgroundColor: meta.color }} />
+                <div className="space-y-1">
+                  <div className="relative">
+                    {meta && (
+                      <span className="absolute left-2.5 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ backgroundColor: meta.color }} />
+                    )}
+                    <select
+                      value={l.categoryId}
+                      onChange={(e) => setLine(l.key, { categoryId: e.target.value, quantity: e.target.value ? l.quantity : "" })}
+                      className="w-full appearance-none rounded-md border border-ink-600 bg-ink-900/70 py-2 pl-6 pr-2 text-sm text-ink-100 outline-none focus:border-moss-300/60"
+                    >
+                      <option value="">选择品类…</option>
+                      {leafCategories.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} · ¥{formatMoney(c.unitPrice)}/{unitLabel(c.unit)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {cat && (
+                    <div className="flex items-center gap-2 px-1">
+                      <MarketPriceHint categoryId={cat.id} type="buy" variant="badge" />
+                    </div>
                   )}
-                  <select
-                    value={l.categoryId}
-                    onChange={(e) => setLine(l.key, { categoryId: e.target.value, quantity: e.target.value ? l.quantity : "" })}
-                    className="w-full appearance-none rounded-md border border-ink-600 bg-ink-900/70 py-2 pl-6 pr-2 text-sm text-ink-100 outline-none focus:border-moss-300/60"
-                  >
-                    <option value="">选择品类…</option>
-                    {leafCategories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} · ¥{formatMoney(c.unitPrice)}/{unitLabel(c.unit)}
-                      </option>
-                    ))}
-                  </select>
                 </div>
                 <div className="text-center text-xs text-ink-300">
                   {cat ? unitLabel(cat.unit) : "—"}

@@ -6,6 +6,8 @@ import {
   TrendingUp,
   Layers,
   Search,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { useStore } from "@/store";
 import type { Category, CategoryType } from "@/lib/types";
@@ -15,13 +17,19 @@ import SectionHeader from "@/components/ui/SectionHeader";
 import Badge from "@/components/ui/Badge";
 import PricingCard from "@/components/pricing/PricingCard";
 import PriceAdjustModal from "@/components/pricing/PriceAdjustModal";
+import MarketPriceCard from "@/components/market/MarketPriceCard";
+import MarketPriceEntryModal from "@/components/market/MarketPriceEntryModal";
 
 export default function Pricing() {
   const categories = useStore((s) => s.categories);
+  const marketPrices = useStore((s) => s.marketPrices);
   const [selected, setSelected] = useState<CategoryType | "all">("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set(CATEGORY_ORDER));
   const [search, setSearch] = useState("");
   const [adjusting, setAdjusting] = useState<Category | null>(null);
+  const [showMarketEntry, setShowMarketEntry] = useState(false);
+  const [selectedMarketCategory, setSelectedMarketCategory] = useState<string | undefined>();
+  const [showMarketPanel, setShowMarketPanel] = useState(true);
 
   const groups = useMemo(() => {
     return CATEGORY_ORDER.map((type) => ({
@@ -48,6 +56,34 @@ export default function Pricing() {
     return Math.round((leafs.reduce((s, c) => s + c.unitPrice, 0) / leafs.length) * 100) / 100;
   }, [categories]);
 
+  const avgMarketBuy = useMemo(() => {
+    const kgMp = marketPrices.filter((m) => m.unit === "kg");
+    if (!kgMp.length) return 0;
+    return Math.round((kgMp.reduce((s, m) => s + m.currentBuy, 0) / kgMp.length) * 100) / 100;
+  }, [marketPrices]);
+
+  const avgMarketSell = useMemo(() => {
+    const kgMp = marketPrices.filter((m) => m.unit === "kg");
+    if (!kgMp.length) return 0;
+    return Math.round((kgMp.reduce((s, m) => s + m.currentSell, 0) / kgMp.length) * 100) / 100;
+  }, [marketPrices]);
+
+  const risingCount = useMemo(() => {
+    return marketPrices.filter((m) => {
+      const t = m.weekTrend;
+      if (t.length < 2) return false;
+      return t[t.length - 1].buyPrice > t[t.length - 2].buyPrice;
+    }).length;
+  }, [marketPrices]);
+
+  const fallingCount = useMemo(() => {
+    return marketPrices.filter((m) => {
+      const t = m.weekTrend;
+      if (t.length < 2) return false;
+      return t[t.length - 1].buyPrice < t[t.length - 2].buyPrice;
+    }).length;
+  }, [marketPrices]);
+
   const toggleExpand = (type: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -65,6 +101,83 @@ export default function Pricing() {
         <SummaryStat icon={Tag} label="公斤品类均价" value={`¥${formatMoney(avgPrice)}`} tone="amber" />
         <SummaryStat icon={TrendingUp} label="五大类" value={CATEGORY_ORDER.length} tone="sky" unit="大类" />
         <SummaryStat icon={CircleDot} label="调价记录" value={categories.reduce((s, c) => s + Math.max(0, c.priceHistory.length - 1), 0)} tone="fuchsia" unit="次" />
+      </div>
+
+      {/* Market Price Overview */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center justify-between border-b border-ink-700/60 px-5 py-4">
+          <SectionHeader
+            title="今日行情参考"
+            description={`共 ${marketPrices.length} 个品类，上涨 ${risingCount} · 下跌 ${fallingCount} · 持平 ${marketPrices.length - risingCount - fallingCount}`}
+            className="!mb-0"
+          />
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setSelectedMarketCategory(undefined); setShowMarketEntry(true); }}
+              className="btn-amber h-8 text-xs"
+            >
+              <Plus size={13} /> 录入今日行情
+            </button>
+            <button
+              onClick={() => setShowMarketPanel((v) => !v)}
+              className="btn-ghost h-8 px-2 text-xs"
+              title={showMarketPanel ? "收起行情面板" : "展开行情面板"}
+            >
+              <RefreshCw size={13} className={cn(showMarketPanel && "rotate-180", "transition-transform")} />
+            </button>
+          </div>
+        </div>
+
+        {showMarketPanel && (
+          <div className="p-5">
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-lg border border-moss-300/20 bg-moss-300/5 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-moss-300/80">公斤品类参考收购均价</p>
+                <p className="mt-1 font-display text-xl tracking-wide text-moss-300">¥{formatMoney(avgMarketBuy)}</p>
+              </div>
+              <div className="rounded-lg border border-amber-300/20 bg-amber-300/5 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-amber-300/80">公斤品类参考出货均价</p>
+                <p className="mt-1 font-display text-xl tracking-wide text-amber-300">¥{formatMoney(avgMarketSell)}</p>
+              </div>
+              <div className="rounded-lg border border-moss-300/20 bg-ink-800/40 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-ink-400">今日上涨品类</p>
+                <p className="mt-1 font-display text-xl tracking-wide text-moss-300">{risingCount}</p>
+              </div>
+              <div className="rounded-lg border border-brick-300/20 bg-ink-800/40 p-3">
+                <p className="text-[10px] uppercase tracking-wider text-ink-400">今日下跌品类</p>
+                <p className="mt-1 font-display text-xl tracking-wide text-brick-300">{fallingCount}</p>
+              </div>
+            </div>
+
+            {CATEGORY_ORDER.map((type) => {
+              const m = CATEGORY_META[type];
+              const typeMarketPrices = marketPrices.filter((mp) => mp.type === type);
+              if (typeMarketPrices.length === 0) return null;
+              return (
+                <div key={type} className="mb-5 last:mb-0">
+                  <div className="mb-2 flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: m.color }} />
+                    <h4 className="text-sm font-medium text-ink-100">{m.label}类行情</h4>
+                    <span className="text-xs text-ink-500">{typeMarketPrices.length} 个品类</span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {typeMarketPrices.map((mp) => (
+                      <div key={mp.categoryId} className="group">
+                        <MarketPriceCard marketPrice={mp} compact />
+                        <button
+                          onClick={() => { setSelectedMarketCategory(mp.categoryId); setShowMarketEntry(true); }}
+                          className="mt-1 w-full text-[10px] text-ink-500 transition-colors hover:text-moss-300"
+                        >
+                          更新行情 →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[280px_1fr]">
@@ -176,6 +289,12 @@ export default function Pricing() {
         open={!!adjusting}
         category={adjusting}
         onClose={() => setAdjusting(null)}
+      />
+
+      <MarketPriceEntryModal
+        open={showMarketEntry}
+        onClose={() => setShowMarketEntry(false)}
+        preselectedCategoryId={selectedMarketCategory}
       />
     </div>
   );

@@ -9,6 +9,8 @@ import type {
   SalesOrder,
   Settlement,
   SortRecord,
+  MarketPrice,
+  MarketPricePoint,
 } from "./types";
 
 const NOW = new Date("2026-06-20T16:30:00").getTime();
@@ -393,6 +395,53 @@ function buildSortRecords(transactions: Transaction[]): SortRecord[] {
   return out;
 }
 
+function dateStr(offset: number): string {
+  const d = new Date(NOW - offset * DAY);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function buildMarketPrices(categories: Category[]): MarketPrice[] {
+  const leafCats = categories.filter((c) => c.parentId !== null);
+  const sellPriceMultipliers: Record<string, number> = {
+    cat_paper_cardboard: 1.65, cat_paper_newspaper: 1.6, cat_paper_book: 1.5, cat_paper_mixed: 1.55,
+    cat_plastic_pet: 1.55, cat_plastic_hard: 1.5, cat_plastic_film: 1.6,
+    cat_metal_iron: 1.25, cat_metal_copper: 1.12, cat_metal_brass: 1.15, cat_metal_aluminum: 1.18, cat_metal_steel: 1.2,
+    cat_app_ac: 1.4, cat_app_fridge: 1.35, cat_app_washer: 1.35, cat_app_tv: 1.4, cat_app_pc: 1.5,
+    cat_clo_summer: 1.8, cat_clo_winter: 1.7, cat_clo_shoes: 1.75,
+  };
+
+  return leafCats.map((cat) => {
+    const baseBuy = cat.unitPrice;
+    const baseSell = baseBuy * (sellPriceMultipliers[cat.id] ?? 1.4);
+    const weekTrend: MarketPricePoint[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const variance = 1 + (Math.sin(i * 0.8 + cat.id.charCodeAt(cat.id.length - 1) * 0.1) * 0.06) - i * 0.008;
+      const buyP = Math.round(baseBuy * variance * 100) / 100;
+      const sellP = Math.round(baseSell * variance * 100) / 100;
+      weekTrend.push({
+        date: dateStr(i),
+        buyPrice: buyP,
+        sellPrice: sellP,
+        source: i === 0 ? "local" : "seed",
+        recordedAt: NOW - i * DAY,
+      });
+    }
+
+    const today = weekTrend[weekTrend.length - 1];
+    return {
+      categoryId: cat.id,
+      categoryName: cat.name,
+      type: cat.type,
+      unit: cat.unit,
+      currentBuy: today.buyPrice,
+      currentSell: today.sellPrice,
+      weekTrend,
+      updatedAt: NOW,
+    };
+  });
+}
+
 export function buildSeed(): AppState {
   const transactions = generateTransactions();
   const inventory = buildInventory(transactions);
@@ -400,6 +449,7 @@ export function buildSeed(): AppState {
   const salesOrders = buildSalesOrders();
   const settlements = buildSettlements();
   const sortRecords = buildSortRecords(transactions);
+  const marketPrices = buildMarketPrices(CATEGORIES);
   return {
     station: {
       name: "绿源回收 · 城东站",
@@ -416,6 +466,7 @@ export function buildSeed(): AppState {
     salesOrders,
     settlements,
     sortRecords,
+    marketPrices,
   };
 }
 

@@ -145,6 +145,26 @@ export interface StationInfo {
   operator: string;
 }
 
+export interface MarketPricePoint {
+  date: string;
+  buyPrice: number;
+  sellPrice: number;
+  source: "manual" | "local" | "seed";
+  note?: string;
+  recordedAt: number;
+}
+
+export interface MarketPrice {
+  categoryId: string;
+  categoryName: string;
+  type: CategoryType;
+  unit: PriceUnit;
+  currentBuy: number;
+  currentSell: number;
+  weekTrend: MarketPricePoint[];
+  updatedAt: number;
+}
+
 export interface AppState {
   station: StationInfo;
   categories: Category[];
@@ -155,4 +175,5 @@ export interface AppState {
   sortRecords: SortRecord[];
   settlements: Settlement[];
   customers: Customer[];
+  marketPrices: MarketPrice[];
 }

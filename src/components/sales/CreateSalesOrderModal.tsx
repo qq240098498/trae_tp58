@@ -3,6 +3,7 @@ import { Plus, Trash2, PackageCheck } from "lucide-react";
 import { useStore } from "@/store";
 import { CATEGORY_META, formatMoney, unitLabel } from "@/lib/format";
 import Modal from "@/components/ui/Modal";
+import MarketPriceHint from "@/components/market/MarketPriceHint";
 
 interface CreateSalesOrderModalProps {
   open: boolean;
@@ -152,7 +153,7 @@ export default function CreateSalesOrderModal({ open, onClose }: CreateSalesOrde
           </div>
           <div className="space-y-2">
             <div className="grid grid-cols-[1fr_120px_130px_110px_36px] gap-2 px-1 text-[10px] uppercase tracking-wider text-ink-400">
-              <span>品类</span>
+              <span>品类 <span className="text-amber-300/60 normal-case tracking-normal">（含今日参考售价）</span></span>
               <span className="text-center">单位</span>
               <span className="text-center">出货数量</span>
               <span className="text-center">出货单价</span>
@@ -165,22 +166,29 @@ export default function CreateSalesOrderModal({ open, onClose }: CreateSalesOrde
               const inv = inventory.find((b) => b.categoryId === l.categoryId);
               return (
                 <div key={l.key} className="grid grid-cols-[1fr_120px_130px_110px_36px] items-center gap-2 rounded-lg border border-ink-700/50 bg-ink-800/40 p-1.5">
-                  <div className="relative">
-                    {meta && (
-                      <span className="absolute left-2.5 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ backgroundColor: meta.color }} />
+                  <div className="space-y-1">
+                    <div className="relative">
+                      {meta && (
+                        <span className="absolute left-2.5 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full" style={{ backgroundColor: meta.color }} />
+                      )}
+                      <select
+                        value={l.categoryId}
+                        onChange={(e) => onCatChange(l.key, e.target.value)}
+                        className="w-full appearance-none rounded-md border border-ink-600 bg-ink-900/70 py-2 pl-6 pr-2 text-sm text-ink-100 outline-none focus:border-moss-300/60"
+                      >
+                        <option value="">选择品类…</option>
+                        {availableCats.map(({ cat: c, stock }) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name}（库存 {stock!.weightKg || stock!.pieceCount}{c.unit === "kg" ? "kg" : "件"}）
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {cat && (
+                      <div className="flex items-center gap-2 px-1">
+                        <MarketPriceHint categoryId={cat.id} type="sell" variant="badge" />
+                      </div>
                     )}
-                    <select
-                      value={l.categoryId}
-                      onChange={(e) => onCatChange(l.key, e.target.value)}
-                      className="w-full appearance-none rounded-md border border-ink-600 bg-ink-900/70 py-2 pl-6 pr-2 text-sm text-ink-100 outline-none focus:border-moss-300/60"
-                    >
-                      <option value="">选择品类…</option>
-                      {availableCats.map(({ cat: c, stock }) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}（库存 {stock!.weightKg || stock!.pieceCount}{c.unit === "kg" ? "kg" : "件"}）
-                        </option>
-                      ))}
-                    </select>
                   </div>
                   <div className="text-center text-xs text-ink-300">
                     {cat ? unitLabel(cat.unit) : "—"}
@@ -222,7 +230,7 @@ export default function CreateSalesOrderModal({ open, onClose }: CreateSalesOrde
               );
             })}
           </div>
-          <p className="mt-1.5 text-[11px] text-ink-400">出货单价默认按收购价 1.4 倍建议，可手动调整</p>
+          <p className="mt-1.5 text-[11px] text-ink-400">出货单价默认按收购价 1.4 倍建议，可参考今日行情手动调整</p>
         </div>
 
         <div>
