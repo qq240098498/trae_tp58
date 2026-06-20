@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #1a1d16;
+  color: #d6dbc8;
+  background-image:
+    radial-gradient(circle at 15% -10%, rgba(123, 163, 95, 0.08), transparent 45%),
+    radial-gradient(circle at 85% 5%, rgba(232, 163, 61, 0.06), transparent 40%),
+    linear-gradient(rgba(146, 158, 130, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(146, 158, 130, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 44px 44px, 44px 44px;
+  background-attachment: fixed;
+}
+
+@layer components {
+  .card {
+    @apply rounded-xl border border-ink-700/70 bg-ink-800/80 shadow-panel backdrop-blur-sm;
+  }
+  .card-hover {
+    @apply transition-all duration-200 hover:border-moss-300/40 hover:shadow-glow;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply btn bg-moss-400 text-ink-950 hover:bg-moss-300 hover:-translate-y-0.5 hover:shadow-glow;
+  }
+  .btn-amber {
+    @apply btn bg-amber-300 text-ink-950 hover:bg-amber-200 hover:-translate-y-0.5;
+  }
+  .btn-ghost {
+    @apply btn border border-ink-600 bg-ink-800/60 text-ink-100 hover:border-ink-400 hover:bg-ink-750;
+  }
+  .btn-danger {
+    @apply btn border border-brick-500/60 bg-brick-600/20 text-brick-300 hover:bg-brick-600/40;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium;
+  }
+  .input {
+    @apply w-full rounded-md border border-ink-600 bg-ink-900/70 px-3 py-2 text-sm text-ink-100 placeholder:text-ink-400 outline-none transition-colors focus:border-moss-300/60 focus:ring-2 focus:ring-moss-300/20;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium uppercase tracking-wider text-ink-300;
+  }
+  .stat-num {
+    @apply font-mono font-semibold tabular-nums;
+  }
+  .table-row-hover {
+    @apply transition-colors hover:bg-ink-750/60;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(110, 120, 96, 0.4) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(110, 120, 96, 0.35);
+    border-radius: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(110, 120, 96, 0.55);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ===== 小票打印样式 ===== */
+.receipt-print-root {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 80mm;
+  background: #fff;
+  color: #000;
+}
+
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .receipt-print-root,
+  .receipt-print-root * {
+    visibility: visible !important;
+  }
+  .receipt-print-root {
+    left: 0 !important;
+    top: 0 !important;
+    width: 80mm;
+    box-shadow: none !important;
+  }
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+  body {
+    background: #fff !important;
+  }
+}
